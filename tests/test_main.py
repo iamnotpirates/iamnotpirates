@@ -472,3 +472,38 @@ def test_handle_retry_failed_retries_all(mock_get_failed, mock_select, mock_re, 
     mock_update.assert_called_once_with(1, {"status": "success", "error": None})
 
 
+@patch("src.main.search_content")
+@patch("src.main.questionary.text")
+def test_handle_search_empty_input(mock_text, mock_search):
+    mock_ask = MagicMock()
+    mock_ask.ask.return_value = ""
+    mock_text.return_value = mock_ask
+
+    from src.main import handle_search
+    handle_search("https://z2.idlixku.com/", {})
+    mock_search.assert_not_called()
+
+
+@patch("src.main.questionary.select")
+@patch("src.main.search_content")
+@patch("src.main.questionary.text")
+def test_handle_search_success(mock_text, mock_search, mock_select):
+    mock_ask = MagicMock()
+    mock_ask.ask.return_value = "avatar"
+    mock_text.return_value = mock_ask
+
+    mock_search.return_value = [
+        {"title": "Avatar", "type": "Movie", "rating": "7.9", "url": "https://z2.idlixku.com/movie/avatar-2009"}
+    ]
+
+    mock_select_obj = MagicMock()
+    mock_select_obj.ask.return_value = "↩️ Kembali ke Menu Utama"
+    mock_select.return_value = mock_select_obj
+
+    from src.main import handle_search
+    handle_search("https://z2.idlixku.com/", {})
+
+    mock_search.assert_called_once_with("https://z2.idlixku.com/", "avatar")
+
+
+

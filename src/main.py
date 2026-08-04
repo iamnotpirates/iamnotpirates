@@ -10,7 +10,7 @@ from src.config_manager import (
     load_config, save_config, add_target_url, set_active_url, delete_target_url,
     get_download_dir, set_download_dir, set_organize_mode
 )
-from src.scraper import fetch_featured_content
+from src.scraper import fetch_featured_content, search_content
 from src.ui import print_header, format_featured_table, print_error, print_success
 from src.video_extractor import extract_video_sources
 from src.downloader import (
@@ -513,6 +513,37 @@ def handle_settings() -> None:
                 save_config(config)
                 print_success(f"Default Folder Combined diubah ke: {new_dir.strip()}")
 
+def handle_search(active_url: str, config: dict) -> None:
+    while True:
+        query = questionary.text("Masukkan judul film/series yang dicari:").ask()
+        if not query or not query.strip():
+            return
+
+        console.print(f"\n[bold cyan]Mencari \"{query.strip()}\"...[/bold cyan]")
+        items = search_content(active_url, query.strip())
+        if not items:
+            console.print(f"[yellow]Tidak ada hasil ditemukan untuk \"{query.strip()}\".[/yellow]")
+        else:
+            table = format_featured_table(items)
+            console.print(table)
+
+            action = questionary.select(
+                "Pilih Aksi:",
+                choices=[
+                    "📥 Download Film/Series",
+                    "🔍 Cari Judul Lain",
+                    "↩️ Kembali ke Menu Utama"
+                ]
+            ).ask()
+
+            if action == "📥 Download Film/Series":
+                handle_item_download(items, active_url, config)
+                break
+            elif action == "🔍 Cari Judul Lain":
+                continue
+            else:
+                break
+
 def main() -> None:
     init_db()
     ensure_binary(console)
@@ -538,7 +569,8 @@ def main() -> None:
         choice = questionary.select(
             "Pilih Menu:",
             choices=[
-                "🚀 Scrape Featured Content",
+                "🔍 Cari Film / TV Series",
+                "🔥 Lihat Featured Content",
                 "📋 Lihat & Retry Download Gagal",
                 "🛠️  Pengaturan (Folder & Mode)",
                 "🌐 Pilih / Ganti Active Target URL",
@@ -548,7 +580,9 @@ def main() -> None:
             ]
         ).ask()
 
-        if choice == "🚀 Scrape Featured Content":
+        if choice == "🔍 Cari Film / TV Series":
+            handle_search(active_url, config)
+        elif choice == "🔥 Lihat Featured Content" or choice == "🚀 Scrape Featured Content":
             handle_featured(active_url)
         elif choice == "📋 Lihat & Retry Download Gagal":
             handle_retry_failed(active_url, config)
