@@ -146,7 +146,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                 season_dir, base_filename = format_tv_paths(clean_title, year, season_num, ep["episode_num"], target_dir)
                 console.print(f"[bold green]Memulai download Episode {ep['episode_num']} ({selected_quality}) ke {season_dir}...[/bold green]")
 
-                video_path = download_media_stream(m3u8_urls[0], season_dir, base_filename, "N/A", selected_quality)
+                video_path = download_media_stream(m3u8_urls[0], season_dir, base_filename, "N/A", selected_quality, create_subfolder=False)
 
                 if video_path and os.path.exists(video_path):
                     print_success(f"Berhasil mendownload Episode {ep['episode_num']}: {video_path}")

@@ -91,7 +91,14 @@ def inspect_stream_qualities(m3u8_url: str) -> list[str]:
         pass
     return default_qualities
 
-def download_media_stream(m3u8_url: str, output_dir: str, title: str, year: str = "N/A", quality: str = "1080p (Best)") -> str | None:
+def download_media_stream(
+    m3u8_url: str,
+    output_dir: str,
+    title: str,
+    year: str = "N/A",
+    quality: str = "1080p (Best)",
+    create_subfolder: bool = True
+) -> str | None:
     """Downloads m3u8 video stream into Jellyfin-formatted folder using yt-dlp.
 
     Returns target video filepath on success, None on error.
@@ -100,11 +107,16 @@ def download_media_stream(m3u8_url: str, output_dir: str, title: str, year: str 
     if not clean_title:
         clean_title = "Downloaded_Media"
 
-    folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
-    target_folder = os.path.join(output_dir, folder_name)
-    os.makedirs(target_folder, exist_ok=True)
+    if create_subfolder:
+        folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
+        target_folder = os.path.join(output_dir, folder_name)
+        os.makedirs(target_folder, exist_ok=True)
+        target_video_base = os.path.join(target_folder, f"{folder_name}.mp4")
+    else:
+        target_folder = output_dir
+        os.makedirs(target_folder, exist_ok=True)
+        target_video_base = os.path.join(target_folder, f"{clean_title}.mp4")
 
-    target_video_base = os.path.join(target_folder, f"{folder_name}.mp4")
     unique_video_path = get_unique_filepath(target_video_base)
     output_template = unique_video_path.replace(".mp4", ".%(ext)s")
 
