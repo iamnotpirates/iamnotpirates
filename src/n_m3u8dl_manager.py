@@ -90,6 +90,42 @@ def ensure_binary(console=None) -> str | None:
         return None
 
 
+import re
+from rich.progress import (
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
+    TaskProgressColumn,
+    TimeRemainingColumn,
+)
+
+
+def parse_re_log_line(line: str) -> dict:
+    """Parses N_m3u8DL-RE stdout line to extract progress, speed, and segment counts."""
+    data = {}
+    if not line:
+        return data
+
+    # Match segment total e.g. "1489 Segments"
+    tot_match = re.search(r"(\d+)\s+Segments", line, re.IGNORECASE)
+    if tot_match:
+        data["total_segments"] = int(tot_match.group(1))
+
+    # Match progress e.g. "450/1000" or "45.0%"
+    prog_match = re.search(r"(\d+)\s*/\s*(\d+)", line)
+    if prog_match:
+        data["current_segments"] = int(prog_match.group(1))
+        data["total_segments"] = int(prog_match.group(2))
+
+    # Match speed e.g. "12.5 MB/s" or "800.5 KB/s"
+    speed_match = re.search(r"(\d+\.?\d*\s+[KMG]B/s)", line, re.IGNORECASE)
+    if speed_match:
+        data["speed"] = speed_match.group(1)
+
+    return data
+
+
 def download_with_re(
     m3u8_url: str,
     save_dir: str,
@@ -97,7 +133,7 @@ def download_with_re(
     thread_count: int = 16,
     console=None,
 ) -> bool:
-    """Download an HLS/DASH stream using N_m3u8DL-RE.
+    """Download an HLS/DASH stream using N_m3u8DL-RE with interactive Rich progress bar.
 
     Calls ensure_binary() first; if the binary is unavailable returns False.
 
@@ -127,5 +163,49 @@ def download_with_re(
         "--no-log",
     ]
 
-    result = subprocess.run(cmd, check=False)
-    return result.returncode == 0
+    progress = Progress(
+        SpinnerColumn(),
+        TextColumn("[bold cyan]{task.description}[/bold cyan]"),
+        BarColumn(bar_width=40),
+        TaskProgressColumn(),
+        TextColumn("[yellow]{task.fields[info]}[/yellow]"),
+        TimeRemainingColumn(),
+        console=console,
+        transient=True,
+    )
+
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            bufsize=1,
+        )
+
+        with progress:
+            task_id = progress.add_task(f"Downloading {save_name}.mp4", total=100, info="")
+            total_segs = 0
+
+            if proc.stdout:
+                for line in iter(proc.stdout.readline, ""):
+                    parsed = parse_re_log_line(line)
+                    if "total_segments" in parsed and parsed["total_segments"] > 0:
+                        total_segs = parsed["total_segments"]
+
+                    if "current_segments" in parsed and total_segs > 0:
+                        cur_segs = parsed["current_segments"]
+                        pct = min(100.0, (cur_segs / total_segs) * 100.0)
+                        spd = parsed.get("speed", "")
+                        info_str = f"{cur_segs}/{total_segs} segs ({spd})" if spd else f"{cur_segs}/{total_segs} segs"
+                        progress.update(task_id, completed=pct, info=info_str)
+
+            proc.wait()
+            return proc.returncode == 0
+    except Exception as exc:
+        if console:
+            console.print(f"[bold red]Subprocess execution error: {exc}[/bold red]")
+        return False
+

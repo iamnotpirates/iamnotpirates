@@ -68,15 +68,32 @@ class TestEnsureBinary(unittest.TestCase):
         mock_get.assert_called()
 
 
+class TestParseReLogLine(unittest.TestCase):
+    def test_parse_re_log_line(self):
+        sample_1 = "17:50:17.994 INFO : Vid 5800 Kbps | avc1.640028,mp4a.40.2 | 1489 Segments | ~49m39s"
+        parsed_1 = n_m3u8dl_manager.parse_re_log_line(sample_1)
+        self.assertEqual(parsed_1.get("total_segments"), 1489)
+
+        sample_2 = "Downloading 450/1000 Segments (12.5 MB/s, 45%)"
+        parsed_2 = n_m3u8dl_manager.parse_re_log_line(sample_2)
+        self.assertEqual(parsed_2.get("current_segments"), 450)
+        self.assertEqual(parsed_2.get("total_segments"), 1000)
+        self.assertEqual(parsed_2.get("speed"), "12.5 MB/s")
+
 class TestDownloadWithRe(unittest.TestCase):
-    @patch("n_m3u8dl_manager.subprocess.run")
+    @patch("n_m3u8dl_manager.subprocess.Popen")
     @patch("n_m3u8dl_manager.ensure_binary")
-    def test_download_with_re_success(self, mock_ensure, mock_run):
-        """subprocess.run returncode=0 → True."""
+    def test_download_with_re_success(self, mock_ensure, mock_popen):
+        """subprocess.Popen returncode=0 → True."""
         mock_ensure.return_value = r"C:\fake\.iamnotpirates\bin\N_m3u8DL-RE.exe"
         mock_proc = MagicMock()
+        mock_proc.poll.side_effect = [None, 0]
         mock_proc.returncode = 0
-        mock_run.return_value = mock_proc
+        mock_proc.stdout.readline.side_effect = [
+            "17:50:17.994 INFO : Vid 5800 Kbps | 100 Segments\n",
+            ""
+        ]
+        mock_popen.return_value = mock_proc
 
         result = n_m3u8dl_manager.download_with_re(
             "http://example.com/index.m3u8",
@@ -85,14 +102,16 @@ class TestDownloadWithRe(unittest.TestCase):
         )
         self.assertTrue(result)
 
-    @patch("n_m3u8dl_manager.subprocess.run")
+    @patch("n_m3u8dl_manager.subprocess.Popen")
     @patch("n_m3u8dl_manager.ensure_binary")
-    def test_download_with_re_failure(self, mock_ensure, mock_run):
-        """subprocess.run returncode=1 → False."""
+    def test_download_with_re_failure(self, mock_ensure, mock_popen):
+        """subprocess.Popen returncode=1 → False."""
         mock_ensure.return_value = r"C:\fake\.iamnotpirates\bin\N_m3u8DL-RE.exe"
         mock_proc = MagicMock()
+        mock_proc.poll.return_value = 1
         mock_proc.returncode = 1
-        mock_run.return_value = mock_proc
+        mock_proc.stdout.readline.return_value = ""
+        mock_popen.return_value = mock_proc
 
         result = n_m3u8dl_manager.download_with_re(
             "http://example.com/index.m3u8",
@@ -101,9 +120,9 @@ class TestDownloadWithRe(unittest.TestCase):
         )
         self.assertFalse(result)
 
-    @patch("n_m3u8dl_manager.subprocess.run")
+    @patch("n_m3u8dl_manager.subprocess.Popen")
     @patch("n_m3u8dl_manager.ensure_binary")
-    def test_download_with_re_no_binary_returns_false(self, mock_ensure, mock_run):
+    def test_download_with_re_no_binary_returns_false(self, mock_ensure, mock_popen):
         """If ensure_binary returns None (download failed) → False."""
         mock_ensure.return_value = None
         result = n_m3u8dl_manager.download_with_re(
@@ -112,7 +131,7 @@ class TestDownloadWithRe(unittest.TestCase):
             "TestMovie",
         )
         self.assertFalse(result)
-        mock_run.assert_not_called()
+        mock_popen.assert_not_called()
 
 
 if __name__ == "__main__":
