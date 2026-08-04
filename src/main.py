@@ -114,10 +114,12 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         target_dir = custom_dir.strip() if custom_dir else default_dir
         set_download_dir(config, target_dir)
 
-        qualities = inspect_stream_qualities("")
+        # For TV series, quality is selected upfront using default options
+        # (actual stream quality is determined by yt-dlp per episode)
+        static_qualities = ["Best Available", "1080p (Best)", "720p", "480p", "360p"]
         selected_quality = questionary.select(
             "Pilih Kualitas Video:",
-            choices=qualities
+            choices=static_qualities
         ).ask()
 
         if not selected_quality:
