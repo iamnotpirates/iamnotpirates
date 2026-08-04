@@ -1,0 +1,32 @@
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# PyInstaller / Build outputs
+build/
+dist/
+*.manifest
+*.spec.bak
+
+# Virtual environments
+.venv/
+env/
+venv/
+ENV/
+
+# Local databases & user data
+*.db
+*.sqlite3
+config.json
+downloads.json
+.iamnotpirates/
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# SDD docs scratch / temporary outputs
+.superpowers/
