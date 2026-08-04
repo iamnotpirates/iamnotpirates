@@ -39,7 +39,7 @@ This application is managed using **`uv`** (an ultra-fast Python package manager
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/username/iamnotpirates.git
+   git clone https://github.com/aldinal21/iamnotpirates.git
    cd iamnotpirates
    ```
 
