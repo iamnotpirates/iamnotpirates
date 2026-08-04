@@ -6,5 +6,10 @@
       "name": "IDLIX Primary",
       "url": "https://z2.idlixku.com/"
     }
-  ]
+  ],
+  "download_dir": "C:\\Users\\aldinal21\\Downloads",
+  "organize_mode": "separate",
+  "movies_dir": "Z:\\Film\\Movies",
+  "series_dir": "Z:\\Film\\Series",
+  "combined_dir": "C:\\Users\\aldinal21\\Downloads"
 }
