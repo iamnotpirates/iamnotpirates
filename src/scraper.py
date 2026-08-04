@@ -305,3 +305,69 @@ def fetch_featured_content(target_url: str) -> list[dict]:
             raise Exception(f"HTTP Status {response.status_code}")
     except Exception as e:
         raise Exception(f"Failed to fetch {target_url}: {str(e)}")
+
+
+def search_content(target_url: str, query: str) -> list[dict]:
+    """Searches media content via IDLIX JSON API endpoint."""
+    q_clean = query.strip()
+    if not q_clean:
+        return []
+
+    base_url = target_url.rstrip("/")
+    api_url = f"{base_url}/api/search?q={requests.utils.quote(q_clean)}"
+
+    try:
+        res = requests.get(
+            api_url,
+            impersonate="chrome120",
+            headers={
+                "User-Agent": (
+                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/120.0.0.0 Safari/537.36"
+                )
+            },
+            timeout=15
+        )
+        if res.status_code != 200:
+            return []
+
+        data = res.json()
+        results = data.get("results", [])
+        if not isinstance(results, list):
+            return []
+
+        items = []
+        for item in results:
+            title = item.get("title") or item.get("name") or "Unknown"
+            slug = item.get("slug", "")
+            content_type = item.get("contentType", "")
+
+            is_tv = content_type in ("tv_series", "series", "tvshows") or "/series/" in slug or "/tvshows/" in slug
+            type_str = "TV Series" if is_tv else "Movie"
+
+            if is_tv:
+                url = f"{base_url}/series/{slug}" if slug else base_url
+            else:
+                url = f"{base_url}/movie/{slug}" if slug else base_url
+
+            rel_date = str(item.get("releaseDate", "") or item.get("firstAirDate", ""))
+            year = rel_date[:4] if rel_date and len(rel_date) >= 4 and rel_date[:4].isdigit() else "N/A"
+
+            rating = item.get("voteAverage")
+            rating_str = str(round(float(rating), 1)) if rating is not None else "N/A"
+
+            items.append({
+                "title": title,
+                "url": url,
+                "rating": rating_str,
+                "type": type_str,
+                "year": year,
+                "quality": "WEB-DL",
+                "poster": item.get("posterPath", "")
+            })
+
+        return items
+    except Exception:
+        return []
+

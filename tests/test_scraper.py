@@ -107,3 +107,44 @@ def test_fetch_featured_content_playwright_success(mock_pw):
     assert len(items) == 1
     assert items[0]["title"] == "Supergirl"
 
+
+@patch("src.scraper.requests.get")
+def test_search_content_success(mock_get):
+    mock_response = MagicMock()
+    mock_response.status_code = 200
+    mock_response.json.return_value = {
+        "results": [
+            {
+                "title": "Avatar",
+                "contentType": "movie",
+                "slug": "avatar-2009",
+                "releaseDate": "2009-12-18",
+                "voteAverage": 7.9
+            },
+            {
+                "name": "Avatar: The Last Airbender",
+                "contentType": "tv_series",
+                "slug": "avatar-the-last-airbender-2024",
+                "releaseDate": "2024-02-22",
+                "voteAverage": 8.1
+            }
+        ]
+    }
+    mock_get.return_value = mock_response
+
+    from src.scraper import search_content
+    items = search_content("https://z2.idlixku.com/", "avatar")
+
+    assert len(items) == 2
+    assert items[0]["title"] == "Avatar"
+    assert items[0]["url"] == "https://z2.idlixku.com/movie/avatar-2009"
+    assert items[0]["type"] == "Movie"
+    assert items[0]["year"] == "2009"
+    assert items[0]["rating"] == "7.9"
+
+    assert items[1]["title"] == "Avatar: The Last Airbender"
+    assert items[1]["url"] == "https://z2.idlixku.com/series/avatar-the-last-airbender-2024"
+    assert items[1]["type"] == "TV Series"
+    assert items[1]["year"] == "2024"
+    assert items[1]["rating"] == "8.1"
+
