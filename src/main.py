@@ -12,7 +12,6 @@ from src.scraper import fetch_featured_content
 from src.ui import print_header, format_featured_table, print_error, print_success
 from src.video_extractor import extract_video_sources
 from src.downloader import (
-    inspect_stream_qualities,
     download_media_stream,
     download_subtitle,
     get_unique_filepath,
@@ -20,6 +19,8 @@ from src.downloader import (
     download_subtitles_batch
 )
 from src.series_extractor import fetch_series_details, extract_episode_sources
+from src.download_log import add_entry, get_failed_entries, update_entry, format_log_table, is_already_downloaded
+from src.n_m3u8dl_manager import download_with_re, ensure_binary
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -131,19 +132,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             set_download_dir(config, target_dir)
             break
 
-        # --- Step 4: Pilih Kualitas ---
-        static_qualities = ["Best Available", "1080p (Best)", "720p", "480p", "360p", "⬅ Kembali"]
-        while True:
-            selected_quality = questionary.select(
-                "Pilih Kualitas Video:",
-                choices=static_qualities
-            ).ask()
-
-            if selected_quality is None or selected_quality == "⬅ Kembali":
-                return
-            break
-
-        # --- Step 5: Pilih Subtitle ---
+        # --- Step 4: Pilih Subtitle ---
         sub_choices = ["Semua Subtitle Tersedia", "Indonesia saja", "English saja", "Tanpa Subtitle", "⬅ Kembali"]
         while True:
             selected_sub_choice = questionary.select(
@@ -157,6 +146,9 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
 
         for ep in selected_episodes:
             console.print(f"\n[bold cyan]Memproses Episode {ep['episode_num']}: {ep['title']}...[/bold cyan]")
+            season_dir, base_filename = format_tv_paths(clean_title, year, season_num, ep["episode_num"], target_dir)
+            expected_path = os.path.join(season_dir, f"{base_filename}.mp4")
+
             try:
                 sources = extract_episode_sources(ep["media_id"], item_url)
                 m3u8_urls = sources.get("m3u8_urls", [])
@@ -164,23 +156,75 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
 
                 if not m3u8_urls:
                     print_error(f"Gagal menemukan link video m3u8 untuk Episode {ep['episode_num']}")
+                    add_entry(
+                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                        media_type="episode",
+                        season=season_num,
+                        episode=ep["episode_num"],
+                        status="failed",
+                        m3u8_url="",
+                        output_path=expected_path,
+                        error="No m3u8 url found"
+                    )
                     continue
 
-                season_dir, base_filename = format_tv_paths(clean_title, year, season_num, ep["episode_num"], target_dir)
-                console.print(f"[bold green]Memulai download Episode {ep['episode_num']} ({selected_quality}) ke {season_dir}...[/bold green]")
+                m3u8_url = m3u8_urls[0]
 
-                video_path = download_media_stream(m3u8_urls[0], season_dir, base_filename, "N/A", selected_quality, create_subfolder=False)
+                if is_already_downloaded(expected_path):
+                    console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada, di-skip.[/yellow]")
+                    add_entry(
+                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                        media_type="episode",
+                        season=season_num,
+                        episode=ep["episode_num"],
+                        status="skipped",
+                        m3u8_url=m3u8_url,
+                        output_path=expected_path
+                    )
+                    continue
+
+                console.print(f"[bold green]Memulai download Episode {ep['episode_num']} ke {season_dir}...[/bold green]")
+                video_path = download_media_stream(m3u8_url, season_dir, base_filename, "N/A", "Best Available", create_subfolder=False)
 
                 if video_path and os.path.exists(video_path):
                     print_success(f"Berhasil mendownload Episode {ep['episode_num']}: {video_path}")
+                    add_entry(
+                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                        media_type="episode",
+                        season=season_num,
+                        episode=ep["episode_num"],
+                        status="success",
+                        m3u8_url=m3u8_url,
+                        output_path=video_path
+                    )
                     if selected_sub_choice != "Tanpa Subtitle":
                         sub_paths = download_subtitles_batch(subtitles, video_path, selected_sub_choice)
                         for sp in sub_paths:
                             print_success(f"Berhasil menyimpan Subtitle: {sp}")
                 else:
                     print_error(f"Gagal mendownload video untuk Episode {ep['episode_num']}")
+                    add_entry(
+                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                        media_type="episode",
+                        season=season_num,
+                        episode=ep["episode_num"],
+                        status="failed",
+                        m3u8_url=m3u8_url,
+                        output_path=expected_path,
+                        error="Download failed"
+                    )
             except Exception as e:
                 print_error(f"Error saat memproses Episode {ep['episode_num']}: {e}")
+                add_entry(
+                    title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                    media_type="episode",
+                    season=season_num,
+                    episode=ep["episode_num"],
+                    status="failed",
+                    m3u8_url="",
+                    output_path=expected_path,
+                    error=str(e)
+                )
         return
 
     console.print(f"\n[bold cyan]Memproses: {clean_title} ({year})...[/bold cyan]")
@@ -198,6 +242,9 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         set_download_dir(config, target_dir)
         break
 
+    folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
+    expected_path = os.path.join(target_dir, folder_name, f"{folder_name}.mp4")
+
     # --- Extract Video Sources ---
     console.print("[bold yellow]Mengambil sumber video & subtitle...[/bold yellow]")
     sources = extract_video_sources(selected_item["url"])
@@ -206,19 +253,19 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
 
     if not m3u8_urls:
         print_error(f"Gagal menemukan link video m3u8 di {selected_item['url']}")
+        add_entry(
+            title=clean_title,
+            media_type="movie",
+            season=None,
+            episode=None,
+            status="failed",
+            m3u8_url="",
+            output_path=expected_path,
+            error="No m3u8 url found"
+        )
         return
 
-    # --- Pilih Kualitas ---
-    qualities = inspect_stream_qualities(m3u8_urls[0]) + ["⬅ Kembali"]
-    while True:
-        selected_quality = questionary.select(
-            "Pilih Kualitas Video:",
-            choices=qualities
-        ).ask()
-
-        if selected_quality is None or selected_quality == "⬅ Kembali":
-            return
-        break
+    m3u8_url = m3u8_urls[0]
 
     # --- Pilih Subtitle ---
     sub_choices = ["Tanpa Subtitle"] + [f"{s['lang']} - {s['url']}" for s in subtitles] + ["⬅ Kembali"]
@@ -232,12 +279,34 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             return
         break
 
+    if is_already_downloaded(expected_path):
+        console.print(f"[yellow]⏭ {clean_title} sudah ada, di-skip.[/yellow]")
+        add_entry(
+            title=clean_title,
+            media_type="movie",
+            season=None,
+            episode=None,
+            status="skipped",
+            m3u8_url=m3u8_url,
+            output_path=expected_path
+        )
+        return
+
     # --- Trigger Download ---
-    console.print(f"[bold green]Memulai download {clean_title} ({selected_quality}) ke {target_dir}...[/bold green]")
-    video_path = download_media_stream(m3u8_urls[0], target_dir, clean_title, year, selected_quality)
+    console.print(f"[bold green]Memulai download {clean_title} ke {target_dir}...[/bold green]")
+    video_path = download_media_stream(m3u8_url, target_dir, clean_title, year, "Best Available")
 
     if video_path and os.path.exists(video_path):
         print_success(f"Berhasil mendownload Video: {video_path}")
+        add_entry(
+            title=clean_title,
+            media_type="movie",
+            season=None,
+            episode=None,
+            status="success",
+            m3u8_url=m3u8_url,
+            output_path=video_path
+        )
 
         # Download Subtitle if selected
         if selected_sub_choice and selected_sub_choice != "Tanpa Subtitle":
@@ -255,6 +324,50 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                     print_error("Gagal mengunduh subtitle SRT.")
     else:
         print_error(f"Gagal mendownload video {clean_title}")
+        add_entry(
+            title=clean_title,
+            media_type="movie",
+            season=None,
+            episode=None,
+            status="failed",
+            m3u8_url=m3u8_url,
+            output_path=expected_path,
+            error="Download failed"
+        )
+
+def handle_retry_failed(active_url: str, config: dict) -> None:
+    failed = get_failed_entries()
+    if not failed:
+        console.print("[green]Tidak ada download yang gagal.[/green]")
+        return
+
+    table = format_log_table(failed)
+    console.print(table)
+
+    action = questionary.select(
+        "Pilih Aksi:",
+        choices=["🔄 Retry Semua yang Gagal", "↩️ Kembali"]
+    ).ask()
+
+    if action != "🔄 Retry Semua yang Gagal":
+        return
+
+    for entry in failed:
+        console.print(f"\n[bold cyan]Retry: {entry['title']}...[/bold cyan]")
+        try:
+            m3u8_url = entry["m3u8_url"]
+            output_path = entry["output_path"]
+            output_dir = os.path.dirname(output_path)
+            base_name = os.path.splitext(os.path.basename(output_path))[0]
+
+            success = download_with_re(m3u8_url, output_dir, base_name)
+            if success:
+                update_entry(entry["id"], {"status": "success", "error": None})
+                print_success(f"Berhasil: {output_path}")
+            else:
+                print_error(f"Masih gagal: {entry['title']}")
+        except Exception as e:
+            print_error(f"Error retry {entry['title']}: {e}")
 
 def handle_featured(active_url: str) -> None:
     config = load_config()
@@ -330,6 +443,7 @@ def handle_manage_urls() -> None:
                 print_success(f"URL {target_item['url']} berhasil dihapus!")
 
 def main() -> None:
+    ensure_binary(console)
     while True:
         config = load_config()
         active_url = config.get("active_url", "")
@@ -352,6 +466,7 @@ def main() -> None:
             "Pilih Menu:",
             choices=[
                 "🚀 Scrape Featured Content",
+                "📋 Lihat & Retry Download Gagal",
                 "🌐 Pilih / Ganti Active Target URL",
                 "➕ Tambah URL Target Baru",
                 "⚙️  Manage List URL (Edit/Delete)",
@@ -361,6 +476,8 @@ def main() -> None:
 
         if choice == "🚀 Scrape Featured Content":
             handle_featured(active_url)
+        elif choice == "📋 Lihat & Retry Download Gagal":
+            handle_retry_failed(active_url, config)
         elif choice == "🌐 Pilih / Ganti Active Target URL":
             handle_select_active()
         elif choice == "➕ Tambah URL Target Baru":

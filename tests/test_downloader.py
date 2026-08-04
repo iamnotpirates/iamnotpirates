@@ -2,7 +2,6 @@ import os
 import pytest
 from unittest.mock import patch, MagicMock
 from src.downloader import (
-    inspect_stream_qualities,
     download_media_stream,
     convert_vtt_to_srt,
     get_unique_filepath,
@@ -57,27 +56,11 @@ def test_download_subtitle_success(tmp_path):
             text = f.read()
             assert "Halo dunia!" in text
 
-def test_inspect_stream_qualities_success():
-    with patch("yt_dlp.YoutubeDL") as mock_ydl_class:
-        mock_instance = MagicMock()
-        mock_instance.extract_info.return_value = {
-            "formats": [
-                {"format_id": "360p", "height": 360},
-                {"format_id": "720p", "height": 720},
-                {"format_id": "1080p", "height": 1080},
-                {"format_id": "audio", "height": None},
-            ]
-        }
-        mock_ydl_class.return_value.__enter__.return_value = mock_instance
-
-        qualities = inspect_stream_qualities("https://example.com/stream.m3u8")
-        assert qualities == ["1080p", "720p", "360p"]
-
 def test_download_media_stream_jellyfin_naming(tmp_path):
     output_dir = str(tmp_path / "downloads")
-    with patch("yt_dlp.YoutubeDL") as mock_ydl_class:
-        mock_instance = MagicMock()
-        mock_ydl_class.return_value.__enter__.return_value = mock_instance
+    with patch("src.downloader.download_with_re") as mock_re, patch("src.downloader.is_already_downloaded") as mock_is_dl:
+        mock_is_dl.return_value = False
+        mock_re.return_value = True
 
         video_path = download_media_stream(
             m3u8_url="https://example.com/stream.m3u8",
@@ -89,6 +72,23 @@ def test_download_media_stream_jellyfin_naming(tmp_path):
         assert video_path is not None
         assert "Colony (2026)" in video_path
         assert video_path.endswith(".mp4")
+        mock_re.assert_called_once()
+
+def test_download_media_stream_already_downloaded(tmp_path):
+    output_dir = str(tmp_path / "downloads")
+    with patch("src.downloader.download_with_re") as mock_re, patch("src.downloader.is_already_downloaded") as mock_is_dl:
+        mock_is_dl.return_value = True
+
+        video_path = download_media_stream(
+            m3u8_url="https://example.com/stream.m3u8",
+            output_dir=output_dir,
+            title="Colony",
+            year="2026"
+        )
+        assert video_path is not None
+        assert "Colony (2026)" in video_path
+        mock_re.assert_not_called()
+
 
 def test_format_tv_paths_with_year():
     season_dir, base_file = format_tv_paths(

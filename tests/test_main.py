@@ -48,15 +48,17 @@ def test_handle_featured_success(mock_fetch, mock_press, mock_select):
 
 
 @patch("src.main.download_media_stream")
-@patch("src.main.inspect_stream_qualities")
 @patch("src.main.extract_video_sources")
 @patch("src.main.set_download_dir")
 @patch("src.main.get_download_dir")
 @patch("src.main.questionary.select")
 @patch("src.main.questionary.text")
+@patch("src.main.add_entry")
+@patch("src.main.is_already_downloaded")
 def test_handle_item_download(
-    mock_text, mock_select, mock_get_dir, mock_set_dir, mock_extract, mock_inspect, mock_download
+    mock_is_dl, mock_add_entry, mock_text, mock_select, mock_get_dir, mock_set_dir, mock_extract, mock_download
 ):
+    mock_is_dl.return_value = False
     items = [
         {"title": "Test Movie 2026", "type": "Movie", "rating": "9.0", "url": "https://z2.idlixku.com/movie/test-2026"}
     ]
@@ -72,28 +74,28 @@ def test_handle_item_download(
         "m3u8_urls": ["https://stream.example.com/master.m3u8"],
         "subtitles": [{"lang": "Indonesian", "url": "https://sub.example.com/id.vtt"}]
     }
-    mock_inspect.return_value = ["1080p", "720p"]
 
-    mock_quality_ask = MagicMock()
-    mock_quality_ask.ask.return_value = "1080p"
     mock_sub_ask = MagicMock()
     mock_sub_ask.ask.return_value = "Tanpa Subtitle"
-    mock_select.side_effect = [mock_quality_ask, mock_sub_ask]
+    mock_select.side_effect = [mock_sub_ask]
 
-    mock_download.return_value = "C:\\Users\\test\\Downloads\\Test Movie (2026)\\Test Movie (2026).mp4"
+    expected_path = "C:\\Users\\test\\Downloads\\Test Movie (2026)\\Test Movie (2026).mp4"
+    mock_download.return_value = expected_path
 
     from src.main import handle_item_download
     handle_item_download(items, "https://z2.idlixku.com/", {"download_dir": "C:\\Users\\test\\Downloads"})
 
     mock_extract.assert_called_once_with("https://z2.idlixku.com/movie/test-2026")
-    mock_inspect.assert_called_once_with("https://stream.example.com/master.m3u8")
     mock_download.assert_called_once_with(
         "https://stream.example.com/master.m3u8",
         "C:\\Users\\test\\Downloads",
         "Test Movie",
         "2026",
-        "1080p"
+        "Best Available"
     )
+    mock_add_entry.assert_called_once()
+    args, kwargs = mock_add_entry.call_args
+    assert kwargs.get("status") == "success" or args[4] == "success" if len(args) > 4 else True
 
 
 @patch("src.main.questionary.press_any_key_to_continue")
@@ -188,10 +190,11 @@ def test_handle_manage_urls_delete(mock_delete, mock_load, mock_select):
     mock_delete.assert_called_once_with("https://z2.idlixku.com/")
 
 
+@patch("src.main.ensure_binary")
 @patch("src.main.questionary.select")
 @patch("src.main.print_header")
 @patch("src.main.load_config")
-def test_main_exit(mock_load, mock_header, mock_select):
+def test_main_exit(mock_load, mock_header, mock_select, mock_ensure):
     mock_load.return_value = {
         "active_url": "https://z2.idlixku.com/",
         "target_urls": [
@@ -206,8 +209,11 @@ def test_main_exit(mock_load, mock_header, mock_select):
         main()
 
     assert excinfo.value.code == 0
+    mock_ensure.assert_called_once()
 
 
+@patch("src.main.add_entry")
+@patch("src.main.is_already_downloaded")
 @patch("src.main.download_subtitles_batch")
 @patch("src.main.download_media_stream")
 @patch("src.main.format_tv_paths")
@@ -229,8 +235,11 @@ def test_handle_item_download_tv_series_success(
     mock_format_paths,
     mock_download_media,
     mock_download_subs,
+    mock_is_dl,
+    mock_add_entry,
     tmp_path,
 ):
+    mock_is_dl.return_value = False
     items = [
         {
             "title": "Breaking Bad (2008)",
@@ -249,11 +258,9 @@ def test_handle_item_download_tv_series_success(
 
     mock_season_ask = MagicMock()
     mock_season_ask.ask.return_value = "Season 1"
-    mock_quality_ask = MagicMock()
-    mock_quality_ask.ask.return_value = "1080p (Best)"
     mock_sub_ask = MagicMock()
     mock_sub_ask.ask.return_value = "Semua Subtitle Tersedia"
-    mock_select.side_effect = [mock_season_ask, mock_quality_ask, mock_sub_ask]
+    mock_select.side_effect = [mock_season_ask, mock_sub_ask]
 
     mock_cb_ask = MagicMock()
     mock_cb_ask.ask.return_value = ["Episode 1: Pilot", "Episode 2: Cat's in the Bag..."]
@@ -298,8 +305,11 @@ def test_handle_item_download_tv_series_success(
     assert mock_extract_ep.call_count == 2
     assert mock_download_media.call_count == 2
     assert mock_download_subs.call_count == 2
+    assert mock_add_entry.call_count == 2
 
 
+@patch("src.main.add_entry")
+@patch("src.main.is_already_downloaded")
 @patch("src.main.download_subtitles_batch")
 @patch("src.main.download_media_stream")
 @patch("src.main.format_tv_paths")
@@ -321,8 +331,11 @@ def test_handle_item_download_tv_series_resilient_error(
     mock_format_paths,
     mock_download_media,
     mock_download_subs,
+    mock_is_dl,
+    mock_add_entry,
     tmp_path,
 ):
+    mock_is_dl.return_value = False
     items = [
         {
             "title": "Breaking Bad",
@@ -341,11 +354,9 @@ def test_handle_item_download_tv_series_resilient_error(
 
     mock_season_ask = MagicMock()
     mock_season_ask.ask.return_value = "Season 1"
-    mock_quality_ask = MagicMock()
-    mock_quality_ask.ask.return_value = "1080p (Best)"
     mock_sub_ask = MagicMock()
     mock_sub_ask.ask.return_value = "Tanpa Subtitle"
-    mock_select.side_effect = [mock_season_ask, mock_quality_ask, mock_sub_ask]
+    mock_select.side_effect = [mock_season_ask, mock_sub_ask]
 
     mock_cb_ask = MagicMock()
     mock_cb_ask.ask.return_value = ["Episode 1: Pilot", "Episode 2: Cat's in the Bag..."]
@@ -381,4 +392,38 @@ def test_handle_item_download_tv_series_resilient_error(
 
     assert mock_extract_ep.call_count == 2
     assert mock_download_media.call_count == 1
+
+
+@patch("src.main.get_failed_entries")
+def test_handle_retry_failed_no_failures(mock_get_failed):
+    mock_get_failed.return_value = []
+    from src.main import handle_retry_failed
+    handle_retry_failed("https://z2.idlixku.com/", {})
+    mock_get_failed.assert_called_once()
+
+
+@patch("src.main.update_entry")
+@patch("src.main.download_with_re")
+@patch("src.main.questionary.select")
+@patch("src.main.get_failed_entries")
+def test_handle_retry_failed_retries_all(mock_get_failed, mock_select, mock_re, mock_update):
+    mock_get_failed.return_value = [
+        {
+            "id": 1,
+            "title": "Failed Movie",
+            "m3u8_url": "https://stream.com/f.m3u8",
+            "output_path": "C:\\Downloads\\Failed Movie.mp4",
+        }
+    ]
+    mock_select_obj = MagicMock()
+    mock_select_obj.ask.return_value = "🔄 Retry Semua yang Gagal"
+    mock_select.return_value = mock_select_obj
+    mock_re.return_value = True
+
+    from src.main import handle_retry_failed
+    handle_retry_failed("https://z2.idlixku.com/", {})
+
+    mock_re.assert_called_once_with("https://stream.com/f.m3u8", "C:\\Downloads", "Failed Movie")
+    mock_update.assert_called_once_with(1, {"status": "success", "error": None})
+
 

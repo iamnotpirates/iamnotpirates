@@ -1,7 +1,8 @@
 import os
 import re
 from curl_cffi import requests
-import yt_dlp
+from src.n_m3u8dl_manager import download_with_re
+from src.download_log import is_already_downloaded
 
 def convert_vtt_to_srt(vtt_content: str) -> str:
     """Converts WebVTT subtitle content string to SubRip (SRT) format."""
@@ -72,35 +73,15 @@ def download_subtitle(sub_url: str, output_srt_path: str) -> bool:
         print(f"[Subtitle Download Error]: {e}")
     return False
 
-def inspect_stream_qualities(m3u8_url: str) -> list[str]:
-    """Inspects available resolutions from m3u8 playlist via yt-dlp."""
-    default_qualities = ["1080p (Best)", "720p", "480p", "360p", "Best Available"]
-    try:
-        ydl_opts = {"quiet": True, "no_warnings": True}
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            info = ydl.extract_info(m3u8_url, download=False)
-            formats = info.get("formats", []) if isinstance(info, dict) else []
-            extracted = []
-            for f in formats:
-                h = f.get("height")
-                if h and f"{h}p" not in extracted:
-                    extracted.append(f"{h}p")
-            if extracted:
-                return sorted(extracted, key=lambda x: int(x.replace("p", "")), reverse=True)
-    except Exception:
-        pass
-    return default_qualities
-
 def download_media_stream(
     m3u8_url: str,
     output_dir: str,
     title: str,
     year: str = "N/A",
-    quality: str = "1080p (Best)",
+    quality: str = "Best Available",
     create_subfolder: bool = True
 ) -> str | None:
-    """Downloads m3u8 video stream into Jellyfin-formatted folder using yt-dlp.
-
+    """Downloads m3u8 video stream using N_m3u8DL-RE.
     Returns target video filepath on success, None on error.
     """
     clean_title = "".join([c for c in title if c.isalnum() or c in (" ", "_", "-")]).strip()
@@ -110,39 +91,21 @@ def download_media_stream(
     if create_subfolder:
         folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
         target_folder = os.path.join(output_dir, folder_name)
-        os.makedirs(target_folder, exist_ok=True)
-        target_video_base = os.path.join(target_folder, f"{folder_name}.mp4")
+        base_filename = folder_name
     else:
         target_folder = output_dir
-        os.makedirs(target_folder, exist_ok=True)
-        target_video_base = os.path.join(target_folder, f"{clean_title}.mp4")
+        base_filename = clean_title
 
-    unique_video_path = get_unique_filepath(target_video_base)
-    output_template = unique_video_path.replace(".mp4", ".%(ext)s")
+    os.makedirs(target_folder, exist_ok=True)
+    expected_output = os.path.join(target_folder, f"{base_filename}.mp4")
 
-    format_spec = "bestvideo+bestaudio/best"
-    if "720" in quality:
-        format_spec = "bestvideo[height<=720]+bestaudio/best[height<=720]"
-    elif "480" in quality:
-        format_spec = "bestvideo[height<=480]+bestaudio/best[height<=480]"
-    elif "360" in quality:
-        format_spec = "bestvideo[height<=360]+bestaudio/best[height<=360]"
+    if is_already_downloaded(expected_output):
+        return expected_output
 
-    ydl_opts = {
-        "format": format_spec,
-        "outtmpl": output_template,
-        "quiet": False,
-        "no_warnings": True,
-        "concurrent_fragment_downloads": 4,
-    }
-
-    try:
-        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-            ydl.download([m3u8_url])
-        return unique_video_path
-    except Exception as e:
-        print(f"[Download Error]: {e}")
-        return None
+    success = download_with_re(m3u8_url, target_folder, base_filename)
+    if success:
+        return expected_output
+    return None
 
 def format_tv_paths(show_title: str, year: str, season_num: int, episode_num: int, target_dir: str) -> tuple[str, str]:
     """Formats Jellyfin compliant directory path and base filename for a TV episode.
