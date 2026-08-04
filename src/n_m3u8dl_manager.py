@@ -163,47 +163,13 @@ def download_with_re(
         "--no-log",
     ]
 
-    progress = Progress(
-        SpinnerColumn(),
-        TextColumn("[bold cyan]{task.description}[/bold cyan]"),
-        BarColumn(bar_width=40),
-        TaskProgressColumn(),
-        TextColumn("[yellow]{task.fields[info]}[/yellow]"),
-        TimeRemainingColumn(),
-        console=console,
-        transient=True,
-    )
-
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            bufsize=1,
-        )
-
-        with progress:
-            task_id = progress.add_task(f"Downloading {save_name}.mp4", total=100, info="")
-            total_segs = 0
-
-            if proc.stdout:
-                for line in iter(proc.stdout.readline, ""):
-                    parsed = parse_re_log_line(line)
-                    if "total_segments" in parsed and parsed["total_segments"] > 0:
-                        total_segs = parsed["total_segments"]
-
-                    if "current_segments" in parsed and total_segs > 0:
-                        cur_segs = parsed["current_segments"]
-                        pct = min(100.0, (cur_segs / total_segs) * 100.0)
-                        spd = parsed.get("speed", "")
-                        info_str = f"{cur_segs}/{total_segs} segs ({spd})" if spd else f"{cur_segs}/{total_segs} segs"
-                        progress.update(task_id, completed=pct, info=info_str)
-
-            proc.wait()
-            return proc.returncode == 0
+        result = subprocess.run(cmd, check=False)
+        return result.returncode == 0
+    except KeyboardInterrupt:
+        if console:
+            console.print("\n[bold yellow]⚠️ Download dibatalkan oleh pengguna (Ctrl+C).[/bold yellow]")
+        return False
     except Exception as exc:
         if console:
             console.print(f"[bold red]Subprocess execution error: {exc}[/bold red]")
