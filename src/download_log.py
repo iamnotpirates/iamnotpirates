@@ -58,15 +58,16 @@ def save_log(entries: list[dict]) -> None:
 # ---------------------------------------------------------------------------
 
 
-def add_entry(entry: dict) -> None:
+def add_entry(entry: dict | None = None, **kwargs) -> None:
     """Append a new entry. Generates id and timestamp automatically if missing."""
-    entry = dict(entry)  # avoid mutating caller's dict
-    if not entry.get("id"):
-        entry["id"] = str(uuid.uuid4())
-    if not entry.get("timestamp"):
-        entry["timestamp"] = datetime.now().isoformat()
+    data = dict(entry) if entry else {}
+    data.update(kwargs)
+    if not data.get("id"):
+        data["id"] = str(uuid.uuid4())
+    if not data.get("timestamp"):
+        data["timestamp"] = datetime.now().isoformat()
     entries = load_log()
-    entries.append(entry)
+    entries.append(data)
     save_log(entries)
 
 
