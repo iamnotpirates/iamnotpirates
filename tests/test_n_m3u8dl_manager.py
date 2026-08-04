@@ -68,17 +68,7 @@ class TestEnsureBinary(unittest.TestCase):
         mock_get.assert_called()
 
 
-class TestParseReLogLine(unittest.TestCase):
-    def test_parse_re_log_line(self):
-        sample_1 = "17:50:17.994 INFO : Vid 5800 Kbps | avc1.640028,mp4a.40.2 | 1489 Segments | ~49m39s"
-        parsed_1 = n_m3u8dl_manager.parse_re_log_line(sample_1)
-        self.assertEqual(parsed_1.get("total_segments"), 1489)
 
-        sample_2 = "Downloading 450/1000 Segments (12.5 MB/s, 45%)"
-        parsed_2 = n_m3u8dl_manager.parse_re_log_line(sample_2)
-        self.assertEqual(parsed_2.get("current_segments"), 450)
-        self.assertEqual(parsed_2.get("total_segments"), 1000)
-        self.assertEqual(parsed_2.get("speed"), "12.5 MB/s")
 
 class TestDownloadWithRe(unittest.TestCase):
     @patch("n_m3u8dl_manager.subprocess.run")

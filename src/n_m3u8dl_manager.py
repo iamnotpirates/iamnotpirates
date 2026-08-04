@@ -90,40 +90,7 @@ def ensure_binary(console=None) -> str | None:
         return None
 
 
-import re
-from rich.progress import (
-    Progress,
-    SpinnerColumn,
-    TextColumn,
-    BarColumn,
-    TaskProgressColumn,
-    TimeRemainingColumn,
-)
 
-
-def parse_re_log_line(line: str) -> dict:
-    """Parses N_m3u8DL-RE stdout line to extract progress, speed, and segment counts."""
-    data = {}
-    if not line:
-        return data
-
-    # Match segment total e.g. "1489 Segments"
-    tot_match = re.search(r"(\d+)\s+Segments", line, re.IGNORECASE)
-    if tot_match:
-        data["total_segments"] = int(tot_match.group(1))
-
-    # Match progress e.g. "450/1000" or "45.0%"
-    prog_match = re.search(r"(\d+)\s*/\s*(\d+)", line)
-    if prog_match:
-        data["current_segments"] = int(prog_match.group(1))
-        data["total_segments"] = int(prog_match.group(2))
-
-    # Match speed e.g. "12.5 MB/s" or "800.5 KB/s"
-    speed_match = re.search(r"(\d+\.?\d*\s+[KMG]B/s)", line, re.IGNORECASE)
-    if speed_match:
-        data["speed"] = speed_match.group(1)
-
-    return data
 
 
 def download_with_re(
