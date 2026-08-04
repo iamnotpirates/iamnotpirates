@@ -39,13 +39,18 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         console.print("[yellow]Tidak ada item untuk di-download.[/yellow]")
         return
 
-    choice_num = questionary.text(
-        f"Masukkan nomor item yang ingin di-download (1-{len(items)}):",
-        validate=lambda val: val.isdigit() and 1 <= int(val) <= len(items)
-    ).ask()
+    while True:
+        choice_num = questionary.text(
+            f"Masukkan nomor item yang ingin di-download (1-{len(items)}):",
+            validate=lambda val: val.isdigit() and 1 <= int(val) <= len(items)
+        ).ask()
 
-    if not choice_num:
-        return
+        if choice_num is None:
+            return
+        if not choice_num:
+            console.print("[yellow]Masukkan nomor yang valid.[/yellow]")
+            continue
+        break
 
     selected_item = items[int(choice_num) - 1]
     raw_title = selected_item.get("title", "Unknown")
@@ -76,63 +81,79 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         if series_info.get("year") and series_info["year"] != "N/A":
             year = series_info["year"]
 
-        season_choices = [f"Season {s['season_num']}" for s in seasons]
-        selected_season_str = questionary.select(
-            "Pilih Season:",
-            choices=season_choices
-        ).ask()
+        # --- Step 1: Pilih Season ---
+        season_choices = [f"Season {s['season_num']}" for s in seasons] + ["⬅ Kembali"]
+        while True:
+            selected_season_str = questionary.select(
+                "Pilih Season:",
+                choices=season_choices
+            ).ask()
 
-        if not selected_season_str:
-            return
+            if selected_season_str is None or selected_season_str == "⬅ Kembali":
+                return
 
-        selected_season = next((s for s in seasons if f"Season {s['season_num']}" == selected_season_str), None)
-        if not selected_season or not selected_season.get("episodes"):
-            print_error("Season tidak valid atau tidak memiliki episode.")
-            return
+            selected_season = next((s for s in seasons if f"Season {s['season_num']}" == selected_season_str), None)
+            if selected_season and selected_season.get("episodes"):
+                break
+            print_error("Season tidak valid atau tidak memiliki episode. Silakan pilih lagi.")
 
         season_num = selected_season["season_num"]
         episodes = selected_season["episodes"]
 
+        # --- Step 2: Pilih Episode ---
         ep_choices = [f"Episode {ep['episode_num']}: {ep['title']}" for ep in episodes]
-        selected_ep_labels = questionary.checkbox(
-            "Pilih Episode yang ingin di-download:",
-            choices=ep_choices
-        ).ask()
+        while True:
+            selected_ep_labels = questionary.checkbox(
+                "Pilih Episode yang ingin di-download (SPACE untuk pilih, ENTER untuk lanjut):",
+                choices=ep_choices
+            ).ask()
 
-        if not selected_ep_labels:
-            console.print("[yellow]Tidak ada episode yang dipilih.[/yellow]")
-            return
+            if selected_ep_labels is None:
+                return
+            if len(selected_ep_labels) == 0:
+                console.print("[yellow]Belum ada episode yang dipilih. Pilih minimal 1 episode.[/yellow]")
+                continue
+            break
 
         ep_map = {f"Episode {ep['episode_num']}: {ep['title']}": ep for ep in episodes}
         selected_episodes = [ep_map[label] for label in selected_ep_labels if label in ep_map]
 
+        # --- Step 3: Lokasi simpan ---
         default_dir = get_download_dir(config)
-        custom_dir = questionary.text(
-            f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
-            default=default_dir
-        ).ask()
-        target_dir = custom_dir.strip() if custom_dir else default_dir
-        set_download_dir(config, target_dir)
+        while True:
+            custom_dir = questionary.text(
+                f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
+                default=default_dir
+            ).ask()
+            if custom_dir is None:
+                return
+            target_dir = custom_dir.strip() if custom_dir else default_dir
+            set_download_dir(config, target_dir)
+            break
 
-        # For TV series, quality is selected upfront using default options
-        # (actual stream quality is determined by yt-dlp per episode)
-        static_qualities = ["Best Available", "1080p (Best)", "720p", "480p", "360p"]
-        selected_quality = questionary.select(
-            "Pilih Kualitas Video:",
-            choices=static_qualities
-        ).ask()
+        # --- Step 4: Pilih Kualitas ---
+        static_qualities = ["Best Available", "1080p (Best)", "720p", "480p", "360p", "⬅ Kembali"]
+        while True:
+            selected_quality = questionary.select(
+                "Pilih Kualitas Video:",
+                choices=static_qualities
+            ).ask()
 
-        if not selected_quality:
-            return
+            if selected_quality is None or selected_quality == "⬅ Kembali":
+                return
+            break
 
-        sub_choices = ["Semua Subtitle Tersedia", "Indonesia saja", "English saja", "Tanpa Subtitle"]
-        selected_sub_choice = questionary.select(
-            "Pilih Subtitle:",
-            choices=sub_choices
-        ).ask()
+        # --- Step 5: Pilih Subtitle ---
+        sub_choices = ["Semua Subtitle Tersedia", "Indonesia saja", "English saja", "Tanpa Subtitle", "⬅ Kembali"]
+        while True:
+            selected_sub_choice = questionary.select(
+                "Pilih Subtitle:",
+                choices=sub_choices
+            ).ask()
 
-        if not selected_sub_choice:
-            return
+            if selected_sub_choice is None or selected_sub_choice == "⬅ Kembali":
+                return
+            break
 
         for ep in selected_episodes:
             console.print(f"\n[bold cyan]Memproses Episode {ep['episode_num']}: {ep['title']}...[/bold cyan]")
@@ -164,16 +185,20 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
 
     console.print(f"\n[bold cyan]Memproses: {clean_title} ({year})...[/bold cyan]")
 
-    # Download Path Prompt
+    # --- Download Path ---
     default_dir = get_download_dir(config)
-    custom_dir = questionary.text(
-        f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
-        default=default_dir
-    ).ask()
-    target_dir = custom_dir.strip() if custom_dir else default_dir
-    set_download_dir(config, target_dir)
+    while True:
+        custom_dir = questionary.text(
+            f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
+            default=default_dir
+        ).ask()
+        if custom_dir is None:
+            return
+        target_dir = custom_dir.strip() if custom_dir else default_dir
+        set_download_dir(config, target_dir)
+        break
 
-    # Extract Video Sources
+    # --- Extract Video Sources ---
     console.print("[bold yellow]Mengambil sumber video & subtitle...[/bold yellow]")
     sources = extract_video_sources(selected_item["url"])
     m3u8_urls = sources.get("m3u8_urls", [])
@@ -183,24 +208,31 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         print_error(f"Gagal menemukan link video m3u8 di {selected_item['url']}")
         return
 
-    # Select Quality
-    qualities = inspect_stream_qualities(m3u8_urls[0])
-    selected_quality = questionary.select(
-        "Pilih Kualitas Video:",
-        choices=qualities
-    ).ask()
+    # --- Pilih Kualitas ---
+    qualities = inspect_stream_qualities(m3u8_urls[0]) + ["⬅ Kembali"]
+    while True:
+        selected_quality = questionary.select(
+            "Pilih Kualitas Video:",
+            choices=qualities
+        ).ask()
 
-    if not selected_quality:
-        return
+        if selected_quality is None or selected_quality == "⬅ Kembali":
+            return
+        break
 
-    # Select Subtitle
-    sub_choices = ["Tanpa Subtitle"] + [f"{s['lang']} - {s['url']}" for s in subtitles]
-    selected_sub_choice = questionary.select(
-        "Pilih Subtitle:",
-        choices=sub_choices
-    ).ask()
+    # --- Pilih Subtitle ---
+    sub_choices = ["Tanpa Subtitle"] + [f"{s['lang']} - {s['url']}" for s in subtitles] + ["⬅ Kembali"]
+    while True:
+        selected_sub_choice = questionary.select(
+            "Pilih Subtitle:",
+            choices=sub_choices
+        ).ask()
 
-    # Trigger Video Stream Download
+        if selected_sub_choice is None or selected_sub_choice == "⬅ Kembali":
+            return
+        break
+
+    # --- Trigger Download ---
     console.print(f"[bold green]Memulai download {clean_title} ({selected_quality}) ke {target_dir}...[/bold green]")
     video_path = download_media_stream(m3u8_urls[0], target_dir, clean_title, year, selected_quality)
 
