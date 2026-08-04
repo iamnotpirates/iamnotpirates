@@ -13,6 +13,10 @@ DEFAULT_CONFIG: Dict[str, Any] = {
             "url": "https://z2.idlixku.com/"
         }
     ],
+    "organize_mode": "separate",  # "separate" or "combined"
+    "movies_dir": os.path.join(os.path.expanduser("~"), "Downloads", "Movies"),
+    "series_dir": os.path.join(os.path.expanduser("~"), "Downloads", "TV Series"),
+    "combined_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
     "download_dir": os.path.join(os.path.expanduser("~"), "Downloads")
 }
 
@@ -36,7 +40,12 @@ def load_config(config_path: str = CONFIG_FILE) -> dict:
         return json.loads(json.dumps(DEFAULT_CONFIG))
     try:
         with open(config_path, "r", encoding="utf-8") as f:
-            return json.load(f)
+            cfg = json.load(f)
+            # Ensure missing key fallbacks
+            for k, v in DEFAULT_CONFIG.items():
+                if k not in cfg:
+                    cfg[k] = v
+            return cfg
     except Exception:
         return json.loads(json.dumps(DEFAULT_CONFIG))
 
@@ -87,14 +96,35 @@ def delete_target_url(url: str, config_path: str = CONFIG_FILE) -> dict:
     return config
 
 
-def get_download_dir(config: dict) -> str:
-    """Get the download directory from config, defaulting to user's Downloads directory."""
-    return config.get("download_dir", os.path.join(os.path.expanduser("~"), "Downloads"))
+def get_download_dir(config: dict, media_type: str = "movie") -> str:
+    """Get the download directory based on media_type ('movie' or 'series') and organize_mode."""
+    organize_mode = config.get("organize_mode", "separate")
+    if organize_mode == "combined":
+        return config.get("combined_dir", config.get("download_dir", os.path.join(os.path.expanduser("~"), "Downloads")))
+
+    if media_type == "series":
+        return config.get("series_dir", os.path.join(os.path.expanduser("~"), "Downloads", "TV Series"))
+    return config.get("movies_dir", os.path.join(os.path.expanduser("~"), "Downloads", "Movies"))
 
 
-def set_download_dir(config: dict, new_dir: str, config_path: str = CONFIG_FILE) -> dict:
-    """Set the download directory in config and save to file."""
-    config["download_dir"] = new_dir
+def set_download_dir(config: dict, new_dir: str, media_type: str = "movie", config_path: str = CONFIG_FILE) -> dict:
+    """Set the download directory for specific media type or combined, and save to file."""
+    organize_mode = config.get("organize_mode", "separate")
+    if organize_mode == "combined":
+        config["combined_dir"] = new_dir
+        config["download_dir"] = new_dir
+    elif media_type == "series":
+        config["series_dir"] = new_dir
+    else:
+        config["movies_dir"] = new_dir
     save_config(config, config_path)
+    return config
+
+
+def set_organize_mode(config: dict, mode: str, config_path: str = CONFIG_FILE) -> dict:
+    """Set organize_mode ('separate' or 'combined') in config and save."""
+    if mode in ("separate", "combined"):
+        config["organize_mode"] = mode
+        save_config(config, config_path)
     return config
 

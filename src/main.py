@@ -5,8 +5,8 @@ import questionary
 from rich.console import Console
 
 from src.config_manager import (
-    load_config, add_target_url, set_active_url, delete_target_url,
-    get_download_dir, set_download_dir
+    load_config, save_config, add_target_url, set_active_url, delete_target_url,
+    get_download_dir, set_download_dir, set_organize_mode
 )
 from src.scraper import fetch_featured_content
 from src.ui import print_header, format_featured_table, print_error, print_success
@@ -120,7 +120,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         selected_episodes = [ep_map[label] for label in selected_ep_labels if label in ep_map]
 
         # --- Step 3: Lokasi simpan ---
-        default_dir = get_download_dir(config)
+        default_dir = get_download_dir(config, media_type="series")
         while True:
             custom_dir = questionary.text(
                 f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
@@ -129,7 +129,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             if custom_dir is None:
                 return
             target_dir = custom_dir.strip() if custom_dir else default_dir
-            set_download_dir(config, target_dir)
+            set_download_dir(config, target_dir, media_type="series")
             break
 
         # --- Step 4: Pilih Subtitle ---
@@ -230,7 +230,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
     console.print(f"\n[bold cyan]Memproses: {clean_title} ({year})...[/bold cyan]")
 
     # --- Download Path ---
-    default_dir = get_download_dir(config)
+    default_dir = get_download_dir(config, media_type="movie")
     while True:
         custom_dir = questionary.text(
             f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
@@ -239,7 +239,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         if custom_dir is None:
             return
         target_dir = custom_dir.strip() if custom_dir else default_dir
-        set_download_dir(config, target_dir)
+        set_download_dir(config, target_dir, media_type="movie")
         break
 
     folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
@@ -442,6 +442,67 @@ def handle_manage_urls() -> None:
                 delete_target_url(target_item["url"])
                 print_success(f"URL {target_item['url']} berhasil dihapus!")
 
+def handle_settings() -> None:
+    while True:
+        config = load_config()
+        mode = config.get("organize_mode", "separate")
+        movies_dir = get_download_dir(config, "movie")
+        series_dir = get_download_dir(config, "series")
+        combined_dir = config.get("combined_dir", get_download_dir(config, "movie"))
+
+        mode_str = "Dipisah (Separate - Movies & TV Series)" if mode == "separate" else "Digabung (Combined)"
+        console.print(f"\n[bold cyan]⚙️  PENGATURAN PENYIMPANAN[/bold cyan]")
+        console.print(f"Mode Organisasi   : [yellow]{mode_str}[/yellow]")
+        if mode == "separate":
+            console.print(f"Folder Movies     : [green]{movies_dir}[/green]")
+            console.print(f"Folder TV Series  : [green]{series_dir}[/green]")
+        else:
+            console.print(f"Folder Combined   : [green]{combined_dir}[/green]")
+
+        choices = [
+            "🔀 Ubah Mode Organisasi (Dipisah / Digabung)",
+            "🎬 Ubah Default Folder Movies",
+            "📺 Ubah Default Folder TV Series",
+            "📦 Ubah Default Folder Combined",
+            "⬅ Kembali ke Menu Utama"
+        ]
+
+        action = questionary.select("Pilih Pengaturan:", choices=choices).ask()
+        if not action or action == "⬅ Kembali ke Menu Utama":
+            break
+
+        if action == "🔀 Ubah Mode Organisasi (Dipisah / Digabung)":
+            new_mode = questionary.select(
+                "Pilih Mode Organisasi Folder:",
+                choices=[
+                    "separate - Dipisah per jenis (Movies/ & TV Series/)",
+                    "combined - Digabung dalam 1 folder root"
+                ]
+            ).ask()
+            if new_mode:
+                mode_key = "separate" if "separate" in new_mode else "combined"
+                set_organize_mode(config, mode_key)
+                print_success(f"Mode organisasi diubah ke: {mode_key}")
+        elif action == "🎬 Ubah Default Folder Movies":
+            new_dir = questionary.text("Masukkan Path Folder Movies:", default=movies_dir).ask()
+            if new_dir:
+                config["movies_dir"] = new_dir.strip()
+                save_config(config)
+                print_success(f"Default Folder Movies diubah ke: {new_dir.strip()}")
+        elif action == "📺 Ubah Default Folder TV Series":
+            new_dir = questionary.text("Masukkan Path Folder TV Series:", default=series_dir).ask()
+            if new_dir:
+                config["series_dir"] = new_dir.strip()
+                save_config(config)
+                print_success(f"Default Folder TV Series diubah ke: {new_dir.strip()}")
+        elif action == "📦 Ubah Default Folder Combined":
+            new_dir = questionary.text("Masukkan Path Folder Combined:", default=combined_dir).ask()
+            if new_dir:
+                config["combined_dir"] = new_dir.strip()
+                config["download_dir"] = new_dir.strip()
+                save_config(config)
+                print_success(f"Default Folder Combined diubah ke: {new_dir.strip()}")
+
 def main() -> None:
     ensure_binary(console)
     while True:
@@ -467,6 +528,7 @@ def main() -> None:
             choices=[
                 "🚀 Scrape Featured Content",
                 "📋 Lihat & Retry Download Gagal",
+                "🛠️  Pengaturan (Folder & Mode)",
                 "🌐 Pilih / Ganti Active Target URL",
                 "➕ Tambah URL Target Baru",
                 "⚙️  Manage List URL (Edit/Delete)",
@@ -478,6 +540,8 @@ def main() -> None:
             handle_featured(active_url)
         elif choice == "📋 Lihat & Retry Download Gagal":
             handle_retry_failed(active_url, config)
+        elif choice == "🛠️  Pengaturan (Folder & Mode)":
+            handle_settings()
         elif choice == "🌐 Pilih / Ganti Active Target URL":
             handle_select_active()
         elif choice == "➕ Tambah URL Target Baru":
