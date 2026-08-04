@@ -31,10 +31,13 @@ def get_db_path(db_path: Optional[str] = None) -> str:
 def get_connection(db_path: Optional[str] = None) -> sqlite3.Connection:
     """Return a sqlite3 Connection to the target database file."""
     path = get_db_path(db_path)
-    os.makedirs(os.path.dirname(path), exist_ok=True)
+    dirname = os.path.dirname(path)
+    if dirname:
+        os.makedirs(dirname, exist_ok=True)
     conn = sqlite3.connect(path)
     conn.row_factory = sqlite3.Row
     return conn
+
 
 
 def init_db(db_path: Optional[str] = None) -> None:
@@ -217,6 +220,7 @@ def delete_target_url(url: str, db_path: Optional[str] = None) -> dict:
 
 def add_entry(entry: Optional[dict] = None, db_path: Optional[str] = None, **kwargs) -> None:
     """Append a new download log entry to SQLite table."""
+    init_db(db_path)
     data = dict(entry) if entry else {}
     data.update(kwargs)
 
@@ -248,6 +252,7 @@ def update_entry(entry_id: str, updates: dict, db_path: Optional[str] = None) ->
     if not updates:
         return
 
+    init_db(db_path)
     fields = []
     values = []
     for k, v in updates.items():
@@ -255,6 +260,7 @@ def update_entry(entry_id: str, updates: dict, db_path: Optional[str] = None) ->
             k = "media_type"
         fields.append(f"{k} = ?")
         values.append(v)
+
 
     values.append(entry_id)
 

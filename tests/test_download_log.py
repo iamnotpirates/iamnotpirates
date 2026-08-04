@@ -21,8 +21,9 @@ from src.download_log import (
 
 def _patch_log_path(tmp_path):
     """Return a context manager that redirects log path to tmp_path."""
-    log_file = str(tmp_path / "downloads.json")
-    return patch("src.download_log._get_log_path", return_value=log_file)
+    db_file = str(tmp_path / "data.db")
+    return patch("src.db_manager.DB_FILE_PATH", db_file)
+
 
 
 def _make_entry(**kwargs):

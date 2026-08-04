@@ -98,6 +98,51 @@ def test_handle_item_download(
     assert kwargs.get("status") == "success" or args[4] == "success" if len(args) > 4 else True
 
 
+@patch("src.main.download_media_stream")
+@patch("src.main.extract_video_sources")
+@patch("src.main.set_download_dir")
+@patch("src.main.get_download_dir")
+@patch("src.main.questionary.select")
+@patch("src.main.questionary.text")
+@patch("src.main.add_entry")
+@patch("src.main.verify_media_file")
+@patch("src.main.is_already_downloaded")
+def test_handle_item_download_auto_heals_corrupted_file(
+    mock_is_dl, mock_verify, mock_add_entry, mock_text, mock_select, mock_get_dir, mock_set_dir, mock_extract, mock_download
+):
+    mock_is_dl.return_value = True
+    mock_verify.return_value = {"video_status": "CORRUPTED", "missing_subtitles": False, "error_message": "Invalid duration"}
+    items = [
+        {"title": "Corrupted Movie 2026", "type": "Movie", "rating": "9.0", "url": "https://z2.idlixku.com/movie/corrupted-2026"}
+    ]
+    mock_get_dir.return_value = "C:\\Users\\test\\Downloads"
+
+    mock_num_ask = MagicMock()
+    mock_num_ask.ask.return_value = "1"
+    mock_dir_ask = MagicMock()
+    mock_dir_ask.ask.return_value = "C:\\Users\\test\\Downloads"
+    mock_text.side_effect = [mock_num_ask, mock_dir_ask]
+
+    mock_extract.return_value = {
+        "m3u8_urls": ["https://stream.example.com/master.m3u8"],
+        "subtitles": []
+    }
+
+    mock_sub_ask = MagicMock()
+    mock_sub_ask.ask.return_value = "Tanpa Subtitle"
+    mock_select.side_effect = [mock_sub_ask]
+
+    expected_path = "C:\\Users\\test\\Downloads\\Corrupted Movie (2026)\\Corrupted Movie (2026).mp4"
+    mock_download.return_value = expected_path
+
+    from src.main import handle_item_download
+    handle_item_download(items, "https://z2.idlixku.com/", {"download_dir": "C:\\Users\\test\\Downloads"})
+
+    mock_verify.assert_called_once()
+    mock_download.assert_called_once()
+
+
+
 @patch("src.main.questionary.press_any_key_to_continue")
 @patch("src.main.fetch_featured_content")
 def test_handle_featured_error(mock_fetch, mock_press):

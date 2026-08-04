@@ -4,6 +4,8 @@ import re
 import questionary
 from rich.console import Console
 
+from src.db_manager import init_db
+from src.ffmpeg_manager import ensure_ffmpeg, verify_media_file
 from src.config_manager import (
     load_config, save_config, add_target_url, set_active_url, delete_target_url,
     get_download_dir, set_download_dir, set_organize_mode
@@ -171,17 +173,21 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                 m3u8_url = m3u8_urls[0]
 
                 if is_already_downloaded(expected_path):
-                    console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada, di-skip.[/yellow]")
-                    add_entry(
-                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
-                        media_type="episode",
-                        season=season_num,
-                        episode=ep["episode_num"],
-                        status="skipped",
-                        m3u8_url=m3u8_url,
-                        output_path=expected_path
-                    )
-                    continue
+                    verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
+                    if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
+                        console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat, di-skip.[/yellow]")
+                        add_entry(
+                            title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                            media_type="episode",
+                            season=season_num,
+                            episode=ep["episode_num"],
+                            status="skipped",
+                            m3u8_url=m3u8_url,
+                            output_path=expected_path
+                        )
+                        continue
+                    else:
+                        console.print(f"[bold yellow]⚠️ Episode {ep['episode_num']} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
 
                 console.print(f"[bold green]Memulai download Episode {ep['episode_num']} ke {season_dir}...[/bold green]")
                 video_path = download_media_stream(m3u8_url, season_dir, base_filename, "N/A", "Best Available", create_subfolder=False)
@@ -280,17 +286,21 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         break
 
     if is_already_downloaded(expected_path):
-        console.print(f"[yellow]⏭ {clean_title} sudah ada, di-skip.[/yellow]")
-        add_entry(
-            title=clean_title,
-            media_type="movie",
-            season=None,
-            episode=None,
-            status="skipped",
-            m3u8_url=m3u8_url,
-            output_path=expected_path
-        )
-        return
+        verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
+        if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
+            console.print(f"[yellow]⏭ {clean_title} sudah ada dan sehat, di-skip.[/yellow]")
+            add_entry(
+                title=clean_title,
+                media_type="movie",
+                season=None,
+                episode=None,
+                status="skipped",
+                m3u8_url=m3u8_url,
+                output_path=expected_path
+            )
+            return
+        else:
+            console.print(f"[bold yellow]⚠️ {clean_title} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
 
     # --- Trigger Download ---
     console.print(f"[bold green]Memulai download {clean_title} ke {target_dir}...[/bold green]")
@@ -504,7 +514,9 @@ def handle_settings() -> None:
                 print_success(f"Default Folder Combined diubah ke: {new_dir.strip()}")
 
 def main() -> None:
+    init_db()
     ensure_binary(console)
+    ensure_ffmpeg(console)
     while True:
         config = load_config()
         active_url = config.get("active_url", "")
@@ -554,3 +566,4 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+

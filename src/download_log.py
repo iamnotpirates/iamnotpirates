@@ -1,94 +1,43 @@
 """
-download_log.py — Persistent JSON log for all download attempts.
-
-Log file location: ~/.iamnotpirates/downloads.json
+download_log.py — Persistent SQLite log for all download attempts (wrapper around db_manager).
 """
 
-import json
 import os
-import uuid
-from datetime import datetime
-
+from typing import Optional
 from rich.table import Table
-from rich.text import Text
 
-
-# ---------------------------------------------------------------------------
-# Internal helpers
-# ---------------------------------------------------------------------------
+import src.db_manager as db_manager
 
 
 def _get_log_path() -> str:
-    """Returns the path to the downloads log file."""
+    """Returns legacy path to downloads log file."""
     return os.path.join(os.path.expanduser("~"), ".iamnotpirates", "downloads.json")
 
 
-# ---------------------------------------------------------------------------
-# Core I/O
-# ---------------------------------------------------------------------------
 
-
-def load_log() -> list[dict]:
-    """Load and return all entries from the log file. Returns [] if missing."""
-    path = _get_log_path()
-    if not os.path.exists(path):
-        return []
-    try:
-        with open(path, "r", encoding="utf-8") as f:
-            data = json.load(f)
-        if isinstance(data, list):
-            return data
-        return []
-    except (json.JSONDecodeError, OSError):
-        return []
+def load_log(db_path: Optional[str] = None) -> list[dict]:
+    """Load and return all entries from database."""
+    return db_manager.load_log(db_path=db_path)
 
 
 def save_log(entries: list[dict]) -> None:
-    """Save full entries list to log file using atomic write."""
-    path = _get_log_path()
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    tmp_path = path + ".tmp"
-    with open(tmp_path, "w", encoding="utf-8") as f:
-        json.dump(entries, f, indent=2, ensure_ascii=False)
-    os.replace(tmp_path, path)
+    """Save full entries list to log file (legacy compatibility, no-op or handled by db_manager)."""
+    pass
 
 
-# ---------------------------------------------------------------------------
-# Entry operations
-# ---------------------------------------------------------------------------
+def add_entry(entry: dict | None = None, db_path: Optional[str] = None, **kwargs) -> None:
+    """Append a new entry using db_manager."""
+    db_manager.add_entry(entry=entry, db_path=db_path, **kwargs)
 
 
-def add_entry(entry: dict | None = None, **kwargs) -> None:
-    """Append a new entry. Generates id and timestamp automatically if missing."""
-    data = dict(entry) if entry else {}
-    data.update(kwargs)
-    if not data.get("id"):
-        data["id"] = str(uuid.uuid4())
-    if not data.get("timestamp"):
-        data["timestamp"] = datetime.now().isoformat()
-    entries = load_log()
-    entries.append(data)
-    save_log(entries)
+def update_entry(entry_id: str, updates: dict, db_path: Optional[str] = None) -> None:
+    """Update a specific entry by id with the given updates dict using db_manager."""
+    db_manager.update_entry(entry_id, updates, db_path=db_path)
 
 
-def update_entry(entry_id: str, updates: dict) -> None:
-    """Update a specific entry by id with the given updates dict."""
-    entries = load_log()
-    for entry in entries:
-        if entry.get("id") == entry_id:
-            entry.update(updates)
-            break
-    save_log(entries)
-
-
-# ---------------------------------------------------------------------------
-# Query helpers
-# ---------------------------------------------------------------------------
-
-
-def get_failed_entries() -> list[dict]:
+def get_failed_entries(db_path: Optional[str] = None) -> list[dict]:
     """Return all entries where status == 'failed'."""
-    return [e for e in load_log() if e.get("status") == "failed"]
+    return db_manager.get_failed_entries(db_path=db_path)
 
 
 def is_already_downloaded(output_path: str, min_size_bytes: int = 1_000_000) -> bool:
@@ -102,52 +51,7 @@ def is_already_downloaded(output_path: str, min_size_bytes: int = 1_000_000) -> 
     return os.path.getsize(output_path) >= min_size_bytes
 
 
-# ---------------------------------------------------------------------------
-# Display
-# ---------------------------------------------------------------------------
-
-
 def format_log_table(entries: list[dict]) -> Table:
-    """
-    Return a Rich Table of entries with columns:
-    No | Type | Title | Season | Episode | Status | Timestamp
+    """Return a Rich Table of entries."""
+    return db_manager.format_log_table(entries)
 
-    Color coding:
-    - success → green
-    - failed  → red
-    - skipped → yellow
-    """
-    STATUS_COLORS = {
-        "success": "green",
-        "failed": "red",
-        "skipped": "yellow",
-    }
-
-    table = Table(show_header=True, header_style="bold cyan")
-    table.add_column("No", style="dim", width=4, justify="right")
-    table.add_column("Type", width=8)
-    table.add_column("Title")
-    table.add_column("Season", justify="center", width=7)
-    table.add_column("Episode", justify="center", width=8)
-    table.add_column("Status", width=9)
-    table.add_column("Timestamp", width=20)
-
-    for i, entry in enumerate(entries, start=1):
-        status = entry.get("status", "")
-        color = STATUS_COLORS.get(status, "white")
-        status_text = Text(status, style=color)
-
-        season = entry.get("season")
-        episode = entry.get("episode")
-
-        table.add_row(
-            str(i),
-            entry.get("type", ""),
-            entry.get("title", ""),
-            str(season) if season is not None else "-",
-            str(episode) if episode is not None else "-",
-            status_text,
-            entry.get("timestamp", ""),
-        )
-
-    return table
