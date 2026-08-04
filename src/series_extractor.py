@@ -16,17 +16,37 @@ def fetch_series_details(page_url_or_slug: str) -> dict:
         if r.status_code == 200:
             data = r.json()
             title = data.get("title", slug.replace("-", " ").title())
-            year = str(data.get("year", "N/A"))
+            year = str(data.get("firstAirDate", data.get("year", "N/A")))[:4] if data.get("firstAirDate") or data.get("year") else "N/A"
             seasons_raw = data.get("seasons", [])
             seasons = []
+            seen_seasons = set()
+
             for s in seasons_raw:
-                s_num = s.get("season", 1)
+                s_num = s.get("seasonNumber") or s.get("season") or 1
+                if s_num in seen_seasons:
+                    continue
+                seen_seasons.add(s_num)
+
+                eps_raw = s.get("episodes")
+                if not eps_raw:
+                    # Fetch season episodes endpoint
+                    season_endpoint = f"https://z2.idlixku.com/api/series/{slug}/season/{s_num}"
+                    try:
+                        r_season = session.get(season_endpoint, headers=headers, timeout=15)
+                        if r_season.status_code == 200:
+                            s_data = r_season.json().get("season", {})
+                            eps_raw = s_data.get("episodes", [])
+                    except Exception:
+                        eps_raw = []
+
                 eps = []
-                for ep in s.get("episodes", []):
+                for ep in (eps_raw or []):
+                    ep_num = ep.get("episodeNumber") or ep.get("episode") or 1
+                    ep_title = ep.get("name") or ep.get("title") or f"Episode {ep_num}"
                     eps.append({
                         "season_num": s_num,
-                        "episode_num": ep.get("episode", 1),
-                        "title": ep.get("title", f"Episode {ep.get('episode', 1)}"),
+                        "episode_num": ep_num,
+                        "title": ep_title,
                         "media_id": ep.get("id", ""),
                         "slug": ep.get("slug", "")
                     })
@@ -49,10 +69,14 @@ def extract_episode_sources(episode_media_id: str | int, page_url: str) -> dict:
         "Content-Type": "application/json"
     }
     try:
-        play_info_url = f"https://z2.idlixku.com/api/watch/play-info/series/{episode_media_id}"
+        play_info_url = f"https://z2.idlixku.com/api/watch/play-info/episode/{episode_media_id}"
         r_info = session.get(play_info_url, headers=headers)
         if r_info.status_code != 200:
-            return {"m3u8_urls": [], "subtitles": []}
+            # Fallback to series endpoint
+            play_info_url = f"https://z2.idlixku.com/api/watch/play-info/series/{episode_media_id}"
+            r_info = session.get(play_info_url, headers=headers)
+            if r_info.status_code != 200:
+                return {"m3u8_urls": [], "subtitles": []}
 
         info_data = r_info.json()
         gate_token = info_data.get("gateToken")
