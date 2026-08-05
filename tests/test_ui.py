@@ -3,7 +3,9 @@ from rich.console import Console
 from rich.table import Table
 
 from src.ui import (
+    format_download_summary_table,
     format_featured_table,
+    print_download_summary,
     print_error,
     print_header,
     print_success,
@@ -91,3 +93,77 @@ def test_print_success():
 
     assert "SUCCESS" in output
     assert "Operation completed" in output
+
+
+def test_format_download_summary_table_rendering():
+    items = [
+        {
+            "title": "Movie 1",
+            "video_status": "SUCCESS",
+            "video_error": None,
+            "subtitles": [{"lang": "id", "status": "SUCCESS"}, {"lang": "en", "status": "SUCCESS"}],
+        },
+        {
+            "title": "Movie 2",
+            "video_status": "SKIPPED",
+            "video_error": None,
+            "subtitles": [{"lang": "id", "status": "SUCCESS"}, {"lang": "en", "status": "FAILED"}],
+        },
+        {
+            "title": "Movie 3",
+            "video_status": "FAILED",
+            "video_error": "Connection timeout",
+            "subtitles": [{"lang": "id", "status": "FAILED"}],
+        },
+        {
+            "title": "Movie 4",
+            "video_status": "SUCCESS",
+            "video_error": None,
+            "subtitles": [],
+        },
+    ]
+
+    table = format_download_summary_table(items)
+    assert isinstance(table, Table)
+    assert table.title == "[bold cyan]Download Detail Result[/bold cyan]"
+    assert table.row_count == 4
+
+    column_headers = [col.header for col in table.columns]
+    assert column_headers == ["No", "Item Title", "Video", "Subtitles", "Details / Error"]
+
+
+def test_print_download_summary_rendering():
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=100)
+    summary_data = {
+        "total_items": 4,
+        "video_success": 2,
+        "video_failed": 1,
+        "video_skipped": 1,
+        "sub_success": 3,
+        "sub_failed": 2,
+        "items": [
+            {
+                "title": "Episode 1",
+                "video_status": "SUCCESS",
+                "video_error": None,
+                "subtitles": [{"lang": "id", "status": "SUCCESS"}],
+            },
+            {
+                "title": "Episode 2",
+                "video_status": "FAILED",
+                "video_error": "No m3u8",
+                "subtitles": [],
+            },
+        ],
+    }
+
+    print_download_summary(summary_data, console=console)
+    output = buf.getvalue()
+
+    assert "DOWNLOAD SUMMARY REPORT" in output
+    assert "Total Items Processed:" in output
+    assert "Episode 1" in output
+    assert "Episode 2" in output
+    assert "No m3u8" in output
+
