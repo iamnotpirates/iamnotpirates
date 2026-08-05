@@ -11,14 +11,15 @@ from src.config_manager import (
     get_download_dir, set_download_dir, set_organize_mode
 )
 from src.scraper import fetch_featured_content, search_content
-from src.ui import print_header, format_featured_table, print_error, print_success
+from src.ui import print_header, format_featured_table, print_error, print_success, print_download_summary
 from src.video_extractor import extract_video_sources
 from src.downloader import (
     download_media_stream,
     download_subtitle,
     get_unique_filepath,
     format_tv_paths,
-    download_subtitles_batch
+    download_subtitles_batch,
+    _get_lang_code
 )
 from src.series_extractor import fetch_series_details, extract_episode_sources
 from src.download_log import add_entry, get_failed_entries, update_entry, format_log_table, is_already_downloaded
@@ -41,6 +42,16 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
     if not items:
         console.print("[yellow]Tidak ada item untuk di-download.[/yellow]")
         return
+
+    summary = {
+        "total_items": 0,
+        "video_success": 0,
+        "video_failed": 0,
+        "video_skipped": 0,
+        "sub_success": 0,
+        "sub_failed": 0,
+        "items": []
+    }
 
     while True:
         choice_num = questionary.text(
@@ -150,6 +161,9 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             console.print(f"\n[bold cyan]Memproses Episode {ep['episode_num']}: {ep['title']}...[/bold cyan]")
             season_dir, base_filename = format_tv_paths(clean_title, year, season_num, ep["episode_num"], target_dir)
             expected_path = os.path.join(season_dir, f"{base_filename}.mp4")
+            ep_title = f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}"
+
+            summary["total_items"] += 1
 
             try:
                 sources = extract_episode_sources(ep["media_id"], item_url)
@@ -159,7 +173,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                 if not m3u8_urls:
                     print_error(f"Gagal menemukan link video m3u8 untuk Episode {ep['episode_num']}")
                     add_entry(
-                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                        title=ep_title,
                         media_type="episode",
                         season=season_num,
                         episode=ep["episode_num"],
@@ -168,6 +182,13 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                         output_path=expected_path,
                         error="No m3u8 url found"
                     )
+                    summary["video_failed"] += 1
+                    summary["items"].append({
+                        "title": ep_title,
+                        "video_status": "FAILED",
+                        "video_error": "No m3u8 url found",
+                        "subtitles": []
+                    })
                     continue
 
                 m3u8_url = m3u8_urls[0]
@@ -177,7 +198,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                     if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
                         console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat, di-skip.[/yellow]")
                         add_entry(
-                            title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                            title=ep_title,
                             media_type="episode",
                             season=season_num,
                             episode=ep["episode_num"],
@@ -185,6 +206,13 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                             m3u8_url=m3u8_url,
                             output_path=expected_path
                         )
+                        summary["video_skipped"] += 1
+                        summary["items"].append({
+                            "title": ep_title,
+                            "video_status": "SKIPPED",
+                            "video_error": None,
+                            "subtitles": []
+                        })
                         continue
                     else:
                         console.print(f"[bold yellow]⚠️ Episode {ep['episode_num']} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
@@ -195,7 +223,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                 if video_path and os.path.exists(video_path):
                     print_success(f"Berhasil mendownload Episode {ep['episode_num']}: {video_path}")
                     add_entry(
-                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                        title=ep_title,
                         media_type="episode",
                         season=season_num,
                         episode=ep["episode_num"],
@@ -203,14 +231,45 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                         m3u8_url=m3u8_url,
                         output_path=video_path
                     )
+                    summary["video_success"] += 1
+                    sub_results = []
                     if selected_sub_choice != "Tanpa Subtitle":
                         sub_paths = download_subtitles_batch(subtitles, video_path, selected_sub_choice)
                         for sp in sub_paths:
                             print_success(f"Berhasil menyimpan Subtitle: {sp}")
+
+                        mode_clean = selected_sub_choice.strip().lower()
+                        target_subs = []
+                        for s in subtitles:
+                            lang = s.get("lang", "")
+                            l_code = _get_lang_code(lang)
+                            if "indonesia" in mode_clean or mode_clean == "id":
+                                if l_code == "id":
+                                    target_subs.append((s, l_code))
+                            elif "english" in mode_clean or mode_clean == "en":
+                                if l_code == "en":
+                                    target_subs.append((s, l_code))
+                            else:
+                                target_subs.append((s, l_code))
+
+                        for idx_sub, (s, l_code) in enumerate(target_subs):
+                            if idx_sub < len(sub_paths):
+                                summary["sub_success"] += 1
+                                sub_results.append({"lang": l_code, "status": "SUCCESS", "error": None})
+                            else:
+                                summary["sub_failed"] += 1
+                                sub_results.append({"lang": l_code, "status": "FAILED", "error": "Download failed"})
+
+                    summary["items"].append({
+                        "title": ep_title,
+                        "video_status": "SUCCESS",
+                        "video_error": None,
+                        "subtitles": sub_results
+                    })
                 else:
                     print_error(f"Gagal mendownload video untuk Episode {ep['episode_num']}")
                     add_entry(
-                        title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                        title=ep_title,
                         media_type="episode",
                         season=season_num,
                         episode=ep["episode_num"],
@@ -219,10 +278,17 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                         output_path=expected_path,
                         error="Download failed"
                     )
+                    summary["video_failed"] += 1
+                    summary["items"].append({
+                        "title": ep_title,
+                        "video_status": "FAILED",
+                        "video_error": "Download failed",
+                        "subtitles": []
+                    })
             except Exception as e:
                 print_error(f"Error saat memproses Episode {ep['episode_num']}: {e}")
                 add_entry(
-                    title=f"{clean_title} S{season_num:02d}E{ep['episode_num']:02d}",
+                    title=ep_title,
                     media_type="episode",
                     season=season_num,
                     episode=ep["episode_num"],
@@ -231,9 +297,18 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                     output_path=expected_path,
                     error=str(e)
                 )
+                summary["video_failed"] += 1
+                summary["items"].append({
+                    "title": ep_title,
+                    "video_status": "FAILED",
+                    "video_error": str(e),
+                    "subtitles": []
+                })
+        print_download_summary(summary)
         return
 
     console.print(f"\n[bold cyan]Memproses: {clean_title} ({year})...[/bold cyan]")
+    summary["total_items"] += 1
 
     # --- Download Path ---
     default_dir = get_download_dir(config, media_type="movie")
@@ -269,6 +344,14 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             output_path=expected_path,
             error="No m3u8 url found"
         )
+        summary["video_failed"] += 1
+        summary["items"].append({
+            "title": clean_title,
+            "video_status": "FAILED",
+            "video_error": "No m3u8 url found",
+            "subtitles": []
+        })
+        print_download_summary(summary)
         return
 
     m3u8_url = m3u8_urls[0]
@@ -298,6 +381,14 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                 m3u8_url=m3u8_url,
                 output_path=expected_path
             )
+            summary["video_skipped"] += 1
+            summary["items"].append({
+                "title": clean_title,
+                "video_status": "SKIPPED",
+                "video_error": None,
+                "subtitles": []
+            })
+            print_download_summary(summary)
             return
         else:
             console.print(f"[bold yellow]⚠️ {clean_title} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
@@ -306,6 +397,7 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
     console.print(f"[bold green]Memulai download {clean_title} ke {target_dir}...[/bold green]")
     video_path = download_media_stream(m3u8_url, target_dir, clean_title, year, "Best Available")
 
+    sub_results = []
     if video_path and os.path.exists(video_path):
         print_success(f"Berhasil mendownload Video: {video_path}")
         add_entry(
@@ -317,12 +409,13 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             m3u8_url=m3u8_url,
             output_path=video_path
         )
+        summary["video_success"] += 1
 
         # Download Subtitle if selected
         if selected_sub_choice and selected_sub_choice != "Tanpa Subtitle":
             matched_sub = next((s for s in subtitles if f"{s['lang']} - {s['url']}" == selected_sub_choice), None)
             if matched_sub:
-                sub_lang = "id" if "ind" in matched_sub["lang"].lower() or "id" in matched_sub["lang"].lower() else "en"
+                sub_lang = _get_lang_code(matched_sub.get("lang", ""))
                 base_name = os.path.splitext(video_path)[0]
                 target_srt_path = f"{base_name}.{sub_lang}.srt"
 
@@ -330,8 +423,19 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                 sub_success = download_subtitle(matched_sub["url"], target_srt_path)
                 if sub_success:
                     print_success(f"Berhasil menyimpan Subtitle SRT: {target_srt_path}")
+                    summary["sub_success"] += 1
+                    sub_results.append({"lang": sub_lang, "status": "SUCCESS", "error": None})
                 else:
                     print_error("Gagal mengunduh subtitle SRT.")
+                    summary["sub_failed"] += 1
+                    sub_results.append({"lang": sub_lang, "status": "FAILED", "error": "Download failed"})
+
+        summary["items"].append({
+            "title": clean_title,
+            "video_status": "SUCCESS",
+            "video_error": None,
+            "subtitles": sub_results
+        })
     else:
         print_error(f"Gagal mendownload video {clean_title}")
         add_entry(
@@ -344,6 +448,15 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             output_path=expected_path,
             error="Download failed"
         )
+        summary["video_failed"] += 1
+        summary["items"].append({
+            "title": clean_title,
+            "video_status": "FAILED",
+            "video_error": "Download failed",
+            "subtitles": []
+        })
+
+    print_download_summary(summary)
 
 def handle_retry_failed(active_url: str, config: dict) -> None:
     failed = get_failed_entries()

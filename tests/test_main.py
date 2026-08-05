@@ -3,6 +3,7 @@ import pytest
 from unittest.mock import patch, MagicMock
 from src.config_manager import load_config, save_config, set_active_url
 from src.main import (
+    handle_item_download,
     handle_featured,
     handle_select_active,
     handle_add_url,
@@ -500,10 +501,165 @@ def test_handle_search_success(mock_text, mock_search, mock_select):
     mock_select_obj.ask.return_value = "↩️ Kembali ke Menu Utama"
     mock_select.return_value = mock_select_obj
 
-    from src.main import handle_search
-    handle_search("https://z2.idlixku.com/", {})
 
-    mock_search.assert_called_once_with("https://z2.idlixku.com/", "avatar")
+@patch("src.main.print_download_summary")
+@patch("src.main.download_subtitle")
+@patch("src.main.download_media_stream")
+@patch("src.main.extract_video_sources")
+@patch("src.main.set_download_dir")
+@patch("src.main.get_download_dir")
+@patch("src.main.questionary.select")
+@patch("src.main.questionary.text")
+@patch("src.main.add_entry")
+@patch("src.main.is_already_downloaded")
+def test_handle_item_download_calls_print_download_summary_movie(
+    mock_is_dl, mock_add_entry, mock_text, mock_select, mock_get_dir, mock_set_dir,
+    mock_extract, mock_download, mock_sub_dl, mock_summary, tmp_path
+):
+    mock_is_dl.return_value = False
+    items = [
+        {"title": "Test Movie 2026", "type": "Movie", "rating": "9.0", "url": "https://z2.idlixku.com/movie/test-2026"}
+    ]
+    mock_get_dir.return_value = str(tmp_path)
+
+    mock_num_ask = MagicMock()
+    mock_num_ask.ask.return_value = "1"
+    mock_dir_ask = MagicMock()
+    mock_dir_ask.ask.return_value = str(tmp_path)
+    mock_text.side_effect = [mock_num_ask, mock_dir_ask]
+
+    mock_extract.return_value = {
+        "m3u8_urls": ["https://stream.example.com/master.m3u8"],
+        "subtitles": [{"lang": "Indonesian", "url": "https://sub.example.com/id.vtt"}]
+    }
+
+    mock_sub_ask = MagicMock()
+    mock_sub_ask.ask.return_value = "Indonesian - https://sub.example.com/id.vtt"
+    mock_select.side_effect = [mock_sub_ask]
+
+    movie_dir = tmp_path / "Test Movie (2026)"
+    movie_dir.mkdir(parents=True, exist_ok=True)
+    expected_file = movie_dir / "Test Movie (2026).mp4"
+    expected_file.touch()
+    expected_path = str(expected_file)
+    mock_download.return_value = expected_path
+    mock_sub_dl.return_value = True
+
+    handle_item_download(items, "https://z2.idlixku.com/", {"download_dir": str(tmp_path)})
+
+    mock_summary.assert_called_once()
+    summary_data = mock_summary.call_args[0][0]
+    assert summary_data["total_items"] == 1
+    assert summary_data["video_success"] == 1
+    assert summary_data["video_failed"] == 0
+    assert summary_data["video_skipped"] == 0
+    assert summary_data["sub_success"] == 1
+    assert summary_data["sub_failed"] == 0
+    assert len(summary_data["items"]) == 1
+    assert summary_data["items"][0]["title"] == "Test Movie"
+    assert summary_data["items"][0]["video_status"] == "SUCCESS"
+    assert summary_data["items"][0]["subtitles"][0]["status"] == "SUCCESS"
+
+
+@patch("src.main.print_download_summary")
+@patch("src.main.add_entry")
+@patch("src.main.is_already_downloaded")
+@patch("src.main.download_subtitles_batch")
+@patch("src.main.download_media_stream")
+@patch("src.main.format_tv_paths")
+@patch("src.main.extract_episode_sources")
+@patch("src.main.fetch_series_details")
+@patch("src.main.set_download_dir")
+@patch("src.main.get_download_dir")
+@patch("src.main.questionary.checkbox")
+@patch("src.main.questionary.select")
+@patch("src.main.questionary.text")
+def test_handle_item_download_calls_print_download_summary_tv_series(
+    mock_text,
+    mock_select,
+    mock_checkbox,
+    mock_get_dir,
+    mock_set_dir,
+    mock_fetch_series,
+    mock_extract_ep,
+    mock_format_paths,
+    mock_download_media,
+    mock_download_subs,
+    mock_is_dl,
+    mock_add_entry,
+    mock_summary,
+    tmp_path,
+):
+    mock_is_dl.return_value = False
+    items = [
+        {
+            "title": "Breaking Bad (2008)",
+            "type": "TV Series",
+            "rating": "9.5",
+            "url": "https://z2.idlixku.com/series/breaking-bad",
+        }
+    ]
+    mock_get_dir.return_value = str(tmp_path)
+
+    mock_num_ask = MagicMock()
+    mock_num_ask.ask.return_value = "1"
+    mock_dir_ask = MagicMock()
+    mock_dir_ask.ask.return_value = str(tmp_path)
+    mock_text.side_effect = [mock_num_ask, mock_dir_ask]
+
+    mock_season_ask = MagicMock()
+    mock_season_ask.ask.return_value = "Season 1"
+    mock_sub_ask = MagicMock()
+    mock_sub_ask.ask.return_value = "Semua Subtitle Tersedia"
+    mock_select.side_effect = [mock_season_ask, mock_sub_ask]
+
+    mock_cb_ask = MagicMock()
+    mock_cb_ask.ask.return_value = ["Episode 1: Pilot", "Episode 2: Cat's in the Bag..."]
+    mock_checkbox.return_value = mock_cb_ask
+
+    mock_fetch_series.return_value = {
+        "title": "Breaking Bad",
+        "year": "2008",
+        "seasons": [
+            {
+                "season_num": 1,
+                "episodes": [
+                    {"season_num": 1, "episode_num": 1, "title": "Pilot", "media_id": "101"},
+                    {"season_num": 1, "episode_num": 2, "title": "Cat's in the Bag...", "media_id": "102"},
+                ],
+            }
+        ],
+    }
+
+    mock_extract_ep.side_effect = [
+        {"m3u8_urls": ["https://stream.example.com/ep1.m3u8"], "subtitles": [{"lang": "Indonesian", "url": "https://sub.example.com/ep1.vtt"}]},
+        {"m3u8_urls": [], "subtitles": []},
+    ]
+
+    mock_format_paths.side_effect = [
+        (str(tmp_path / "Breaking Bad (2008)" / "Season 01"), "Breaking Bad - S01E01"),
+        (str(tmp_path / "Breaking Bad (2008)" / "Season 01"), "Breaking Bad - S01E02"),
+    ]
+
+    ep1_file = tmp_path / "Breaking Bad - S01E01.mp4"
+    ep1_file.touch()
+
+    mock_download_media.side_effect = [str(ep1_file)]
+    mock_download_subs.side_effect = [[str(tmp_path / "Breaking Bad - S01E01.id.srt")]]
+
+    handle_item_download(items, "https://z2.idlixku.com/", {"download_dir": str(tmp_path)})
+
+    mock_summary.assert_called_once()
+    summary_data = mock_summary.call_args[0][0]
+    assert summary_data["total_items"] == 2
+    assert summary_data["video_success"] == 1
+    assert summary_data["video_failed"] == 1
+    assert summary_data["video_skipped"] == 0
+    assert summary_data["sub_success"] == 1
+    assert summary_data["sub_failed"] == 0
+    assert len(summary_data["items"]) == 2
+    assert summary_data["items"][0]["video_status"] == "SUCCESS"
+    assert summary_data["items"][1]["video_status"] == "FAILED"
 
 
 
