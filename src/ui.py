@@ -154,7 +154,7 @@ def print_download_summary(summary_data: dict, console: Console | None = None) -
 
     panel = Panel(
         stats_str,
-        title="[bold green]📊 DOWNLOAD SUMMARY REPORT[/bold green]",
+        title="[bold green]DOWNLOAD SUMMARY REPORT[/bold green]",
         border_style="cyan",
         expand=True,
     )
