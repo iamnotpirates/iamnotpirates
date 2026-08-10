@@ -159,13 +159,10 @@ def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
 def fetch_featured_with_playwright(target_url: str) -> list[dict]:
     """Uses Playwright Chromium to render dynamic client-side Hero Carousel and click all slides."""
     import os
+    from src.playwright_manager import ensure_playwright, get_playwright_browsers_path
 
-    # Ensure Playwright finds system/user installed Chromium when running inside PyInstaller executable
-    user_ms_pw = os.path.expanduser("~\\AppData\\Local\\ms-playwright")
-    if os.path.exists(user_ms_pw):
-        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = user_ms_pw
-    else:
-        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = "0"
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = get_playwright_browsers_path()
+    ensure_playwright()
 
     items = []
     seen_urls = set()

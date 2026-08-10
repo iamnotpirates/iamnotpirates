@@ -24,6 +24,7 @@ from src.downloader import (
 from src.series_extractor import fetch_series_details, extract_episode_sources
 from src.download_log import add_entry, get_failed_entries, update_entry, format_log_table, is_already_downloaded
 from src.n_m3u8dl_manager import download_with_re, ensure_binary
+from src.playwright_manager import ensure_playwright
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -661,6 +662,7 @@ def main() -> None:
     init_db()
     ensure_binary(console)
     ensure_ffmpeg(console)
+    ensure_playwright(console)
     while True:
         config = load_config()
         active_url = config.get("active_url", "")

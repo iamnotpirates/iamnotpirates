@@ -90,9 +90,10 @@ def extract_video_sources(page_url: str) -> dict:
         return api_res
 
     # Playwright fallback
-    user_ms_pw = os.path.expanduser("~\\AppData\\Local\\ms-playwright")
-    if os.path.exists(user_ms_pw):
-        os.environ["PLAYWRIGHT_BROWSERS_PATH"] = user_ms_pw
+    from src.playwright_manager import ensure_playwright, get_playwright_browsers_path
+
+    os.environ["PLAYWRIGHT_BROWSERS_PATH"] = get_playwright_browsers_path()
+    ensure_playwright()
 
     m3u8_urls = []
     subtitles = []

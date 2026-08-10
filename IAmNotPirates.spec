@@ -3,7 +3,15 @@ from PyInstaller.utils.hooks import collect_all
 
 datas = []
 binaries = []
-hiddenimports = []
+hiddenimports = [
+    'playwright',
+    'playwright.sync_api',
+    'playwright._impl._driver',
+    'src.playwright_manager',
+    'src.ffmpeg_manager',
+    'src.n_m3u8dl_manager',
+]
+
 tmp_ret = collect_all('playwright')
 datas += tmp_ret[0]; binaries += tmp_ret[1]; hiddenimports += tmp_ret[2]
 

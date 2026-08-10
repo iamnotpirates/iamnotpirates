@@ -1,5 +1,7 @@
 # 🏴‍☠️ I Am Not Pirates — CLI Media Scraper & Downloader
 
+![Version](https://img.shields.io/badge/version-v1.1.0-blue)
+
 A high-performance, modern interactive Python CLI application to browse, search, and automatically download Movies and TV Series. Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite database management, **Jellyfin / Plex** standard media folder structure, automatic subtitle conversion, and a **Smart FFmpeg Auto-Healing System**.
 
 ---
@@ -39,7 +41,7 @@ This application is managed using **`uv`** (an ultra-fast Python package manager
 
 1. Clone this repository:
    ```bash
-   git clone https://github.com/aldinal21/iamnotpirates.git
+   git clone https://github.com/iamnotpirates/iamnotpirates.git
    cd iamnotpirates
    ```
 

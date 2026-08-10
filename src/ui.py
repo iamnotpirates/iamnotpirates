@@ -10,9 +10,9 @@ def print_header(active_url: str, console: Console | None = None) -> None:
         console = Console()
     console.clear()
     panel = Panel(
-        f"[bold cyan]I AM NOT PIRATES CLI[/bold cyan]\nTarget URL: [yellow]{active_url}[/yellow]",
+        f"[bold cyan]I AM NOT PIRATES CLI v1.1.0[/bold cyan]\nTarget URL: [yellow]{active_url}[/yellow]",
         title="[bold green]I AM NOT PIRATES[/bold green]",
-        subtitle="Streaming & Media Explorer",
+        subtitle="Streaming & Media Explorer v1.1.0",
         border_style="magenta",
     )
     console.print(panel)
