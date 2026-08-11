@@ -167,16 +167,18 @@ The output binary will be generated at `dist/IAmNotPirates.exe`.
 iamnotpirates/
 ├── src/
 │   ├── main.py               # CLI entry point & interactive menu loop (CLI entry point & menu interaktif)
-│   ├── scraper.py            # Playwright scraper & IDLIX JSON API client (Scraper Playwright & klien IDLIX API)
+│   ├── scraper.py            # Playwright scraper & IDLIX API client (Scraper Playwright & klien IDLIX API)
 │   ├── video_extractor.py    # HLS stream extractor & claim token handler (Ekstraktor stream HLS & claim token)
 │   ├── series_extractor.py   # TV Series episode extractor & season parser (Ekstraktor episode TV Series)
 │   ├── downloader.py         # Jellyfin path formatter & batch subtitle downloader (Formatter path Jellyfin & download sub)
 │   ├── playwright_manager.py # Playwright Chromium auto-installer manager (Manager auto-install Chromium)
 │   ├── n_m3u8dl_manager.py   # N_m3u8DL-RE subprocess wrapper & binary manager (Wrapper subprocess N_m3u8DL-RE)
 │   ├── ffmpeg_manager.py     # FFmpeg binary manager & media health verifier (Manager FFmpeg & verifikasi media)
-│   ├── db_manager.py         # SQLite database & configuration manager (SQLite database & manajer konfigurasi)
-│   └── ui.py                 # Rich console UI & banner helpers (Helper UI rich console & banner)
-├── tests/                    # 100+ Pytest unit & integration test suite
+│   ├── db_manager.py         # SQLite database core manager (Manager inti database SQLite)
+│   ├── config_manager.py     # App settings & target URLs manager (Manajer pengaturan & target URL)
+│   ├── download_log.py       # Download history log & retry tracker (Log riwayat download & pelacak retry)
+│   └── ui.py                 # Rich console UI, tables & spinners (UI rich console, tabel & spinner)
+├── tests/                    # 102 Pytest unit & integration test suite
 ├── scripts/                  # Release build automation scripts (Script otomatisasi build release)
 │   └── build_release.py      # Automated PyInstaller executable builder
 ├── docs/                     # Architecture documentation, SDD specs & plans (Dokumentasi arsitektur, spec & plan)
