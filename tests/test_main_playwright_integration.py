@@ -22,7 +22,7 @@ def test_main_calls_ensure_playwright(mock_select, mock_load, mock_init, mock_bi
         "target_urls": [{"id": 1, "name": "IDLIX", "url": "https://z2.idlixku.com/"}],
     }
     mock_select_obj = MagicMock()
-    mock_select_obj.ask.return_value = "❌ Exit Program"
+    mock_select_obj.ask.return_value = "8. ❌ Exit / Keluar"
     mock_select.return_value = mock_select_obj
 
     with pytest.raises(SystemExit):

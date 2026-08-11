@@ -12,27 +12,27 @@ def print_header(active_url: str, console: Console | None = None) -> None:
     panel = Panel(
         f"[bold cyan]I AM NOT PIRATES CLI v1.1.0[/bold cyan]\nTarget URL: [yellow]{active_url}[/yellow]",
         title="[bold green]I AM NOT PIRATES[/bold green]",
-        subtitle="Streaming & Media Explorer v1.1.0",
+        subtitle="Streaming & Media Explorer / Penjelajah Media v1.1.0",
         border_style="magenta",
     )
     console.print(panel)
 
 
 def format_featured_table(items: list[dict]) -> Table:
-    """Returns a styled rich.table.Table with columns: No, Title, Year, Type, Quality, Rating, URL."""
+    """Returns a styled rich.table.Table with dual-language headers: No, Title / Judul, Year / Tahun, Type / Tipe, Quality / Kualitas, Rating, URL / Link."""
     table = Table(
-        title="[bold cyan]Featured Content[/bold cyan]",
+        title="[bold cyan]Featured Content / Konten Populer[/bold cyan]",
         header_style="bold magenta",
         show_header=True,
         expand=True,
     )
     table.add_column("No", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Title", style="bold white")
-    table.add_column("Year", justify="center", style="yellow")
-    table.add_column("Type", style="green")
-    table.add_column("Quality", justify="center", style="bold green")
-    table.add_column("Rating", justify="center", style="yellow")
-    table.add_column("URL", style="blue underline", no_wrap=True)
+    table.add_column("Title / Judul", style="bold white", no_wrap=False, ratio=3)
+    table.add_column("Year / Tahun", justify="center", style="yellow", no_wrap=True)
+    table.add_column("Type / Tipe", style="green", justify="center", no_wrap=True)
+    table.add_column("Quality / Kualitas", justify="center", style="bold green", no_wrap=True)
+    table.add_column("Rating", justify="center", style="yellow", no_wrap=True)
+    table.add_column("URL / Link", style="blue underline", no_wrap=True, ratio=2)
 
     for idx, item in enumerate(items, start=1):
         raw_title = item.get("title", "N/A")
@@ -47,7 +47,12 @@ def format_featured_table(items: list[dict]) -> Table:
             clean_title = raw_title
 
         quality = item.get("quality", "WEB-DL")
-        clickable_url = f"[link={item_url}]{item_url}[/link]" if item_url else "N/A"
+        if item_url:
+            clean_url = re.sub(r"^https?://", "", item_url)
+            short_url = clean_url[:22] + "..." if len(clean_url) > 25 else clean_url
+            clickable_url = f"[link={item_url}]🔗 {short_url}[/link]"
+        else:
+            clickable_url = "N/A"
 
         table.add_row(
             str(idx),

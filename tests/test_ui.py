@@ -33,8 +33,17 @@ def test_format_featured_table_columns_and_rows():
     table = format_featured_table(sample_items)
 
     assert isinstance(table, Table)
+    assert table.title == "[bold cyan]Featured Content / Konten Populer[/bold cyan]"
     column_headers = [col.header for col in table.columns]
-    assert column_headers == ["No", "Title", "Year", "Type", "Quality", "Rating", "URL"]
+    assert column_headers == [
+        "No",
+        "Title / Judul",
+        "Year / Tahun",
+        "Type / Tipe",
+        "Quality / Kualitas",
+        "Rating",
+        "URL / Link",
+    ]
     assert table.row_count == 2
 
 
@@ -43,7 +52,15 @@ def test_format_featured_table_empty():
     assert isinstance(table, Table)
     assert table.row_count == 0
     column_headers = [col.header for col in table.columns]
-    assert column_headers == ["No", "Title", "Year", "Type", "Quality", "Rating", "URL"]
+    assert column_headers == [
+        "No",
+        "Title / Judul",
+        "Year / Tahun",
+        "Type / Tipe",
+        "Quality / Kualitas",
+        "Rating",
+        "URL / Link",
+    ]
 
 
 def test_format_featured_table_missing_keys():
@@ -60,9 +77,17 @@ def test_format_featured_table_year_extraction():
     ]
     table = format_featured_table(sample_items)
     column_headers = [col.header for col in table.columns]
-    assert column_headers == ["No", "Title", "Year", "Type", "Quality", "Rating", "URL"]
-    assert "Year" in column_headers
-    assert "Quality" in column_headers
+    assert column_headers == [
+        "No",
+        "Title / Judul",
+        "Year / Tahun",
+        "Type / Tipe",
+        "Quality / Kualitas",
+        "Rating",
+        "URL / Link",
+    ]
+    assert "Year / Tahun" in column_headers
+    assert "Quality / Kualitas" in column_headers
 
 
 def test_print_header():
@@ -72,6 +97,7 @@ def test_print_header():
     output = buf.getvalue()
 
     assert "I AM NOT PIRATES" in output
+    assert "Streaming & Media Explorer / Penjelajah Media v1.1.0" in output
     assert "https://z2.idlixku.com/" in output
 
 

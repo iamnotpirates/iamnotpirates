@@ -682,36 +682,36 @@ def main() -> None:
         print_header(active_url)
 
         choice = questionary.select(
-            "Pilih Menu:",
+            "Select Menu / Pilih Menu:",
             choices=[
-                "🔍 Cari Film / TV Series",
-                "🔥 Lihat Featured Content",
-                "📋 Lihat & Retry Download Gagal",
-                "🛠️  Pengaturan (Folder & Mode)",
-                "🌐 Pilih / Ganti Active Target URL",
-                "➕ Tambah URL Target Baru",
-                "⚙️  Manage List URL (Edit/Delete)",
-                "❌ Exit Program"
+                "1. 🔍 Search Movie & TV Series / Cari Film & TV Series",
+                "2. 🔥 Browse Featured Content / Lihat Content Populer",
+                "3. 📋 Download Log & Retry / Log & Retry Download Gagal",
+                "4. 🛠️  Settings / Pengaturan (Folder & Mode)",
+                "5. 🌐 Switch Target URL / Pilih Active Target URL",
+                "6. ➕ Add New Target URL / Tambah Target URL Baru",
+                "7. ⚙️  Manage Target URLs / Kelola Daftar Target URL",
+                "8. ❌ Exit / Keluar",
             ]
         ).ask()
 
-        if choice == "🔍 Cari Film / TV Series":
-            handle_search(active_url, config)
-        elif choice == "🔥 Lihat Featured Content" or choice == "🚀 Scrape Featured Content":
-            handle_featured(active_url)
-        elif choice == "📋 Lihat & Retry Download Gagal":
-            handle_retry_failed(active_url, config)
-        elif choice == "🛠️  Pengaturan (Folder & Mode)":
-            handle_settings()
-        elif choice == "🌐 Pilih / Ganti Active Target URL":
-            handle_select_active()
-        elif choice == "➕ Tambah URL Target Baru":
-            handle_add_url()
-        elif choice == "⚙️  Manage List URL (Edit/Delete)":
-            handle_manage_urls()
-        elif choice == "❌ Exit Program" or choice is None:
+        if choice is None or choice.startswith("8."):
             console.print("[bold yellow]Terima kasih! Sampai jumpa.[/bold yellow]")
             sys.exit(0)
+        elif choice.startswith("1."):
+            handle_search(active_url, config)
+        elif choice.startswith("2."):
+            handle_featured(active_url)
+        elif choice.startswith("3."):
+            handle_retry_failed(active_url, config)
+        elif choice.startswith("4."):
+            handle_settings()
+        elif choice.startswith("5."):
+            handle_select_active()
+        elif choice.startswith("6."):
+            handle_add_url()
+        elif choice.startswith("7."):
+            handle_manage_urls()
 
 if __name__ == "__main__":
     main()
