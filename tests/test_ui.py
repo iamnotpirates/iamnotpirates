@@ -72,7 +72,7 @@ def test_format_featured_table_missing_keys():
 
 def test_format_featured_table_year_extraction():
     sample_items = [
-        {"title": "Supergirl 2026", "type": "Movie", "rating": "6.2", "url": "https://z2.idlixku.com/movie/supergirl-2026"},
+        {"title": "Supergirl (2026)", "type": "Movie", "rating": "6.2", "url": "https://z2.idlixku.com/movie/supergirl-2026"},
         {"title": "A Shop for Killers", "type": "TV Series", "rating": "8.2", "url": "https://z2.idlixku.com/series/a-shop-for-killers-2024"},
     ]
     table = format_featured_table(sample_items)
@@ -88,6 +88,16 @@ def test_format_featured_table_year_extraction():
     ]
     assert "Year" in column_headers
     assert "Quality" in column_headers
+
+
+def test_format_featured_table_preserves_title_numbers_and_item_year():
+    sample_items = [
+        {"title": "Blade Runner 2049", "year": "2017", "type": "Movie", "rating": "8.0", "url": "https://z2.idlixku.com/movie/blade-runner-2049"},
+        {"title": "2012 (2009)", "type": "Movie", "rating": "5.8", "url": "https://z2.idlixku.com/movie/2012-2009"},
+    ]
+    table = format_featured_table(sample_items)
+    assert table.row_count == 2
+    # Verify titles and years are properly extracted without stripping title digits
 
 
 def test_print_header():

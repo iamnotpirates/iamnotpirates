@@ -37,14 +37,19 @@ def format_featured_table(items: list[dict]) -> Table:
     for idx, item in enumerate(items, start=1):
         raw_title = item.get("title", "N/A")
         item_url = item.get("url", "")
-        year_match = re.search(r"\b(19\d\d|20\d\d)\b", raw_title)
-        if year_match:
-            year = year_match.group(1)
-            clean_title = re.sub(r"\b(19\d\d|20\d\d)\b", "", raw_title).strip()
+        year = str(item.get("year", "")).strip()
+
+        if year and year != "N/A":
+            clean_title = re.sub(r"\s*\(" + re.escape(year) + r"\)$", "", raw_title).strip()
         else:
-            url_year_match = re.search(r"-?(19\d\d|20\d\d)\b", item_url)
-            year = url_year_match.group(1) if url_year_match else "N/A"
-            clean_title = raw_title
+            year_match = re.search(r"\((19\d\d|20\d\d)\)$", raw_title)
+            if year_match:
+                year = year_match.group(1)
+                clean_title = re.sub(r"\s*\(" + year + r"\)$", "", raw_title).strip()
+            else:
+                url_year_match = re.search(r"-?(19\d\d|20\d\d)\b", item_url)
+                year = url_year_match.group(1) if url_year_match else "N/A"
+                clean_title = raw_title
 
         quality = item.get("quality", "WEB-DL")
         if item_url:
