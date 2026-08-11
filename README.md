@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.svg" alt="I Am Not Pirates Logo" width="160" height="160" />
+</p>
+
 # 🏴‍☠️ I Am Not Pirates — CLI Media Scraper & Downloader
 
 ![Version](https://img.shields.io/badge/version-v1.1.0-blue)
