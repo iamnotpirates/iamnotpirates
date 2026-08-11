@@ -1,12 +1,30 @@
 # 🏴‍☠️ I Am Not Pirates — CLI Media Scraper & Downloader
 
 ![Version](https://img.shields.io/badge/version-v1.1.0-blue)
+![Platform](https://img.shields.io/badge/platform-Windows%2064--bit-0078D6?logo=windows)
 
 A high-performance, modern interactive Python CLI application to browse, search, and automatically download Movies and TV Series.  
 *(Aplikasi CLI Python interaktif modern berkinerja tinggi untuk menjelajah, mencari, dan mendownload Film serta TV Series secara otomatis.)*
 
 Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite database management, **Jellyfin / Plex** standard media folder structure, automatic subtitle conversion, **Playwright Chromium Auto-Healing**, and a **Smart FFmpeg Auto-Healing System**.  
 *(Ditenagai oleh mesin pengunduh **N_m3u8DL-RE** multi-threaded, manajemen database SQLite, struktur folder media standar **Jellyfin / Plex**, konversi subtitle otomatis, sistem **Playwright Chromium Auto-Healing**, dan sistem **FFmpeg Auto-Healing**.)*
+
+---
+
+## 💾 Download & Quick Start — Windows Executable (*Download & Mulai Cepat*)
+
+> 📢 **For Non-IT Users (*Untuk Pengguna Awam*)**: No Python, Git, or developer tools required!  
+> *(Tidak memerlukan instalasi Python, Git, atau tools developer sama sekali!)*
+
+1. Go to the latest [GitHub Releases](https://github.com/iamnotpirates/iamnotpirates/releases) page.  
+   *(Buka halaman [GitHub Releases](https://github.com/iamnotpirates/iamnotpirates/releases) terbaru.)*
+2. Download **`IAmNotPirates.exe`** (Windows 64-bit standalone executable).  
+   *(Unduh file **`IAmNotPirates.exe`** — executable standalone untuk Windows 64-bit.)*
+3. Double-click **`IAmNotPirates.exe`** to start downloading movies and TV series!  
+   *(Klik dua kali **`IAmNotPirates.exe`** untuk langsung menjelajah dan mendownload film/series!)*
+
+> ℹ️ **Note (*Catatan*)**: Currently built and optimized specifically for **Windows 64-bit**. All required background tools (**N_m3u8DL-RE**, **FFmpeg**, and **Chromium**) are automatically downloaded and set up on first run.  
+> *(Saat ini dibangun dan dioptimalkan khusus untuk **Windows 64-bit**. Seluruh pendukung background seperti **N_m3u8DL-RE**, **FFmpeg**, dan **Chromium** diunduh dan dipasang secara otomatis pada eksekusi pertama.)*
 
 ---
 
@@ -65,11 +83,11 @@ Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite
 
 ---
 
-## 🛠️ Prerequisites & Installation (*Prasyarat & Instalasi*)
+## 🛠️ Developer Setup & Source Installation (*Instalasi Sumber & Developer*)
 
 ### Using `uv` (Recommended) (*Menggunakan `uv` — Direkomendasikan*)
-This application is managed using **`uv`** (an ultra-fast Python package manager).  
-*(Aplikasi ini dikelola menggunakan **`uv`** — package manager Python yang sangat cepat.)*
+For developers running from source code, this application is managed using **`uv`** (an ultra-fast Python package manager).  
+*(Untuk pengembang yang menjalankan dari kode sumber, aplikasi ini dikelola menggunakan **`uv`** — package manager Python yang sangat cepat.)*
 
 1. Clone this repository *(Clone repositori ini)*:
    ```bash
