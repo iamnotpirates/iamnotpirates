@@ -2,97 +2,105 @@
 
 ![Version](https://img.shields.io/badge/version-v1.1.0-blue)
 
-Aplikasi CLI Python interaktif modern berkinerja tinggi untuk menjelajah, mencari, dan mendownload Film serta TV Series secara otomatis.
+Aplikasi CLI Python interaktif modern berkinerja tinggi untuk menjelajah, mencari, dan mendownload Film serta TV Series secara otomatis.  
 *A high-performance, modern interactive Python CLI application to browse, search, and automatically download Movies and TV Series.*
 
-Ditenagai oleh mesin pengunduh **N_m3u8DL-RE** multi-threaded, manajemen database SQLite, struktur folder media standar **Jellyfin / Plex**, konversi subtitle otomatis, sistem **Playwright Chromium Auto-Healing**, dan sistem **FFmpeg Auto-Healing**.
+Ditenagai oleh mesin pengunduh **N_m3u8DL-RE** multi-threaded, manajemen database SQLite, struktur folder media standar **Jellyfin / Plex**, konversi subtitle otomatis, sistem **Playwright Chromium Auto-Healing**, dan sistem **FFmpeg Auto-Healing**.  
 *Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite database management, **Jellyfin / Plex** standard media folder structure, automatic subtitle conversion, **Playwright Chromium Auto-Healing**, and a **Smart FFmpeg Auto-Healing System**.*
 
 ---
 
-## ✨ Fitur Utama / Key Features
+## ✨ Fitur Utama
+## ✨ *Key Features*
 
-- **🔍 Pencarian Media Cepat / Fast Media Search**:
-  Cari film atau TV Series langsung berdasarkan judul dari CLI via integrasi API internal.
+- **🔍 Pencarian Media Cepat**:  
+  Cari film atau TV Series langsung berdasarkan judul dari CLI via integrasi API internal.  
   *Search for movies or TV series directly by title from the CLI via internal API integration.*
 
-- **⚡ Pengunduh Kecepatan Tinggi / High-Speed Downloader (N_m3u8DL-RE)**:
-  - Mengunduh HLS/DASH `.m3u8` stream dengan 16 thread paralel.
+- **⚡ Pengunduh Kecepatan Tinggi (N_m3u8DL-RE)**:  
+  - Mengunduh HLS/DASH `.m3u8` stream dengan 16 thread paralel.  
     *Downloads HLS/DASH `.m3u8` streams with 16 parallel threads.*
-  - Mengunduh dan mengelola binary resmi `N_m3u8DL-RE.exe` secara otomatis di bawah `~/.iamnotpirates/bin/` saat pertama kali dijalankan.
+  - Mengunduh dan mengelola binary resmi `N_m3u8DL-RE.exe` secara otomatis di bawah `~/.iamnotpirates/bin/` saat pertama kali dijalankan.  
     *Automatically fetches and manages the official `N_m3u8DL-RE.exe` binary under `~/.iamnotpirates/bin/` on first run.*
-  - Penanganan pembatalan bersih via `Ctrl + C`.
+  - Penanganan pembatalan bersih via `Ctrl + C`.  
     *Clean cancellation handling via `Ctrl + C`.*
 
-- **📺 Struktur Folder Standar Jellyfin / Plex / Standard Folder Structure**:
-  - Pengorganisasian otomatis untuk TV Series: `TV Series/<Judul Show> (<Tahun>)/Season <0X>/<Judul Show> - S<0X>E<0Y>.<ext>`.
+- **📺 Struktur Folder Standar Jellyfin / Plex**:  
+  - Pengorganisasian otomatis untuk TV Series: `TV Series/<Judul Show> (<Tahun>)/Season <0X>/<Judul Show> - S<0X>E<0Y>.<ext>`.  
     *Automatic organization for TV Series: `TV Series/<Show Title> (<Year>)/Season <0X>/<Show Title> - S<0X>E<0Y>.<ext>`.*
-  - Navigasi multi-pilih episode aman dengan opsi `⬅ Kembali` di setiap langkah.
+  - Navigasi multi-pilih episode aman dengan opsi `⬅ Kembali` di setiap langkah.  
     *Fail-safe sequential multi-select episode navigation with a `⬅ Back` option at every step.*
 
-- **📝 Konversi Subtitle Otomatis / Automatic Subtitle Conversion**:
-  - Mengunduh subtitle VTT/SRT multi-bahasa (`.id.srt` & `.en.srt`).
+- **📝 Konversi Subtitle Otomatis**:  
+  - Mengunduh subtitle VTT/SRT multi-bahasa (`.id.srt` & `.en.srt`).  
     *Downloads multi-language VTT/SRT subtitles (`.id.srt` & `.en.srt`).*
-  - Otomatis diasosiasikan dengan file media sesuai konvensi Jellyfin/Plex.
+  - Otomatis diasosiasikan dengan file media sesuai konvensi Jellyfin/Plex.  
     *Automatically associated with media files matching Jellyfin/Plex conventions.*
 
-- **🎭 Playwright Chromium Auto-Healing System**:
-  - Secara otomatis mendeteksi dan memasang binary Chromium untuk pengguna non-IT jika belum ada di komputer.
+- **🎭 Sistem Playwright Chromium Auto-Healing**:  
+  - Secara otomatis mendeteksi dan memasang binary Chromium untuk pengguna non-IT jika belum ada di komputer.  
     *Automatically detects and installs Chromium binary for non-IT users if missing on target PC.*
 
-- **🛡️ Sistem FFmpeg Auto-Healing Pintar / Smart FFmpeg Auto-Healing System**:
-  - Auto-download binary resmi `ffmpeg.exe` & `ffprobe.exe` ke `~/.iamnotpirates/bin/`.
+- **🛡️ Sistem FFmpeg Auto-Healing Pintar**:  
+  - Auto-download binary resmi `ffmpeg.exe` & `ffprobe.exe` ke `~/.iamnotpirates/bin/`.  
     *Auto-downloads official `ffmpeg.exe` & `ffprobe.exe` binaries to `~/.iamnotpirates/bin/`.*
-  - **Pengecekan Kesehatan 3-Level / 3-Level Health Check**:
-    - **Video Rusak / 0-Byte (Corrupt / 0-Byte Video)**: Otomatis menghapus file rusak dan mendownload ulang video + subtitle.
+  - **Pengecekan Kesehatan 3-Level**:  
+    - **Video Rusak / 0-Byte**: Otomatis menghapus file rusak dan mendownload ulang video + subtitle.  
       *Automatically deletes corrupted files and re-downloads video + subtitles.*
-    - **Video Sehat, Subtitle Kurang (Healthy Video, Missing Subtitles)**: **Hanya mendownload subtitle yang hilang** tanpa mendownload ulang video.
+    - **Video Sehat, Subtitle Kurang**: **Hanya mendownload subtitle yang hilang** tanpa mendownload ulang video.  
       *Downloads missing subtitles only without re-downloading existing video files.*
-    - **Video & Subtitle Sehat (Healthy Video & Subtitles)**: Langsung skip download.
+    - **Video & Subtitle Sehat**: Langsung skip download.  
       *Instantly skips download.*
 
-- **🗃️ Database SQLite & Log Download / Persistent SQLite Database & Download Log**:
-  - Menyimpan pengaturan aplikasi, target URL, dan riwayat download di `~/.iamnotpirates/data/data.db`.
+- **🗃️ Database SQLite & Log Download**:  
+  - Menyimpan pengaturan aplikasi, target URL, dan riwayat download di `~/.iamnotpirates/data/data.db`.  
     *Stores application settings, target URLs, and download history in `~/.iamnotpirates/data/data.db`.*
-  - **1-Click Retry Semua yang Gagal / 1-Click Retry All Failed**: Coba ulang semua download yang gagal dengan mudah.
+  - **1-Click Retry Semua yang Gagal**: Coba ulang semua download yang gagal dengan mudah.  
     *Easily retry all failed downloads.*
 
-- **🛠️ Pengaturan Direktori & Organisasi Kustom / Custom Directory & Organization Settings**:
-  - Pilih antara mode `separate` (Film & Series disimpan di folder terpisah) atau mode `combined` (Satu direktori output).
+- **🛠️ Pengaturan Direktori & Organisasi Kustom**:  
+  - Pilih antara mode `separate` (Film & Series disimpan di folder terpisah) atau mode `combined` (Satu direktori output).  
     *Choose between `separate` mode (Movies & Series stored in individual folders) or `combined` mode (Single output directory).*
-  - Konfigurasi direktori download langsung dari menu pengaturan CLI.
+  - Konfigurasi direktori download langsung dari menu pengaturan CLI.  
     *Configure custom download directories directly from the CLI settings menu.*
 
 ---
 
-## 🛠️ Prasyarat & Instalasi / Prerequisites & Installation
+## 🛠️ Prasyarat & Instalasi
+## 🛠️ *Prerequisites & Installation*
 
-### Menggunakan `uv` (Direkomendasikan) / Using `uv` (Recommended)
-Aplikasi ini dikelola menggunakan **`uv`** (package manager Python yang sangat cepat).
+### Menggunakan `uv` (Direkomendasikan)
+### *Using `uv` (Recommended)*
+Aplikasi ini dikelola menggunakan **`uv`** (package manager Python yang sangat cepat).  
 *This application is managed using **`uv`** (an ultra-fast Python package manager).*
 
-1. Clone repositori ini / Clone this repository:
+1. Clone repositori ini:  
+   *Clone this repository:*
    ```bash
    git clone https://github.com/iamnotpirates/iamnotpirates.git
    cd iamnotpirates
    ```
 
-2. Jalankan aplikasi secara langsung (dependensi otomatis diinstall) / Run application directly (dependencies installed automatically):
+2. Jalankan aplikasi secara langsung (dependensi otomatis diinstall):  
+   *Run application directly (dependencies installed automatically):*
    ```bash
    uv run python src/main.py
    ```
 
 ---
 
-## 🚀 Panduan Penggunaan / Usage Guide
+## 🚀 Panduan Penggunaan
+## 🚀 *Usage Guide*
 
-### 1. Menjalankan Mode Pengembangan / Running Development Mode
+### 1. Menjalankan Mode Pengembangan
+### 1. *Running Development Mode*
 ```bash
 uv run python src/main.py
 ```
 
-### 2. Menu Utama Interaktif / Interactive Main Menu
-Setelah dijalankan, Anda akan disambut dengan menu CLI interaktif:
+### 2. Menu Utama Interaktif
+### 2. *Interactive Main Menu*
+Setelah dijalankan, Anda akan disambut dengan menu CLI interaktif:  
 *Once launched, you will be presented with an interactive CLI menu:*
 
 ```text
@@ -109,19 +117,20 @@ Setelah dijalankan, Anda akan disambut dengan menu CLI interaktif:
  8. ❌ Exit Program
 ```
 
-- Pilih **`🔍 Cari Film / TV Series`** dan ketik kata kunci apa saja (misal *"Avatar"* atau *"One Piece"*).
+- Pilih **`🔍 Cari Film / TV Series`** dan ketik kata kunci apa saja (misal *"Avatar"* atau *"One Piece"*).  
   *Select **`🔍 Search Movie / TV Series`** and type any keyword (e.g. "Avatar" or "One Piece").*
-- Pilih episode atau film yang diinginkan; ekstraksi dan pengunduhan akan berjalan secara otomatis!
+- Pilih episode atau film yang diinginkan; ekstraksi dan pengunduhan akan berjalan secara otomatis!  
   *Select your desired episodes or movie; extraction and downloading will process automatically!*
 
 ---
 
-## 🧪 Pengujian Kode / Unit Testing
+## 🧪 Pengujian Kode
+## 🧪 *Unit Testing*
 
-Proyek ini dibangun menggunakan **Test-Driven Development (TDD)** dengan cakupan pengujian lengkap.
+Proyek ini dibangun menggunakan **Test-Driven Development (TDD)** dengan cakupan pengujian lengkap.  
 *This project is built using **Test-Driven Development (TDD)** with complete test coverage.*
 
-Untuk menjalankan seluruh test suite (100+ unit & integration tests):
+Untuk menjalankan seluruh test suite (100+ unit & integration tests):  
 *To run the full test suite (100+ unit & integration tests):*
 ```bash
 uv run pytest -v
@@ -129,21 +138,23 @@ uv run pytest -v
 
 ---
 
-## 📦 Mengompilasi Binary Executable Standalone (`.exe`) / Building Standalone Executable
+## 📦 Mengompilasi Binary Executable Standalone (`.exe`)
+## 📦 *Building Standalone Executable*
 
-Kompilasi aplikasi menjadi satu binary executable Windows standalone (tanpa butuh instalasi Python):
+Kompilasi aplikasi menjadi satu binary executable Windows standalone (tanpa butuh instalasi Python):  
 *Compile the application into a single standalone Windows executable binary (no Python installation required):*
 
 ```bash
 uv run python scripts/build_release.py
 ```
 
-Binary output akan dibuat di `dist/IAmNotPirates.exe`.
+Binary output akan dibuat di `dist/IAmNotPirates.exe`.  
 *The output binary will be generated at `dist/IAmNotPirates.exe`.*
 
 ---
 
-## 📁 Struktur Direktori Proyek / Project Directory Structure
+## 📁 Struktur Direktori Proyek
+## 📁 *Project Directory Structure*
 
 ```text
 iamnotpirates/
@@ -169,7 +180,8 @@ iamnotpirates/
 
 ---
 
-## ⚖️ Lisensi & Penafian / License & Disclaimer
+## ⚖️ Lisensi & Penafian
+## ⚖️ *License & Disclaimer*
 
-Aplikasi ini dibuat untuk tujuan pendidikan, penelitian arsitektur scraping, dan Proof of Concept (PoC) saja. Pengguna bertanggung jawab penuh atas penggunaan alat ini sesuai dengan hukum setempat dan ketentuan layanan yang berlaku.
+Aplikasi ini dibuat untuk tujuan pendidikan, penelitian arsitektur scraping, dan Proof of Concept (PoC) saja. Pengguna bertanggung jawab penuh atas penggunaan alat ini sesuai dengan hukum setempat dan ketentuan layanan yang berlaku.  
 *This application is created for educational purposes, scraping architecture research, and Proof of Concept (PoC) only. Users assume full responsibility for using this tool in compliance with applicable local laws and service terms.*
