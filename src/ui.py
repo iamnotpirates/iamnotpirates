@@ -19,20 +19,20 @@ def print_header(active_url: str, console: Console | None = None) -> None:
 
 
 def format_featured_table(items: list[dict]) -> Table:
-    """Returns a styled rich.table.Table with dual-language headers: No, Title / Judul, Year / Tahun, Type / Tipe, Quality / Kualitas, Rating, URL / Link."""
+    """Returns a styled rich.table.Table with columns: No, Title, Year, Type, Quality, Rating, URL."""
     table = Table(
-        title="[bold cyan]Featured Content / Konten Populer[/bold cyan]",
+        title="[bold cyan]Featured Content[/bold cyan]",
         header_style="bold magenta",
         show_header=True,
         expand=True,
     )
     table.add_column("No", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Title / Judul", style="bold white", min_width=30, max_width=45, no_wrap=False)
-    table.add_column("Year / Tahun", justify="center", style="yellow", no_wrap=True)
-    table.add_column("Type / Tipe", style="green", justify="center", no_wrap=True)
-    table.add_column("Quality / Kualitas", justify="center", style="bold green", no_wrap=True)
+    table.add_column("Title", style="bold white", min_width=30, max_width=45, no_wrap=False)
+    table.add_column("Year", justify="center", style="yellow", no_wrap=True)
+    table.add_column("Type", style="green", justify="center", no_wrap=True)
+    table.add_column("Quality", justify="center", style="bold green", no_wrap=True)
     table.add_column("Rating", justify="center", style="yellow", no_wrap=True)
-    table.add_column("URL / Link", style="blue underline", no_wrap=True)
+    table.add_column("URL", style="blue underline", no_wrap=True)
 
     for idx, item in enumerate(items, start=1):
         raw_title = item.get("title", "N/A")

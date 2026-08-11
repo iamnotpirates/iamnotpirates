@@ -33,16 +33,16 @@ def test_format_featured_table_columns_and_rows():
     table = format_featured_table(sample_items)
 
     assert isinstance(table, Table)
-    assert table.title == "[bold cyan]Featured Content / Konten Populer[/bold cyan]"
+    assert table.title == "[bold cyan]Featured Content[/bold cyan]"
     column_headers = [col.header for col in table.columns]
     assert column_headers == [
         "No",
-        "Title / Judul",
-        "Year / Tahun",
-        "Type / Tipe",
-        "Quality / Kualitas",
+        "Title",
+        "Year",
+        "Type",
+        "Quality",
         "Rating",
-        "URL / Link",
+        "URL",
     ]
     assert table.row_count == 2
 
@@ -54,12 +54,12 @@ def test_format_featured_table_empty():
     column_headers = [col.header for col in table.columns]
     assert column_headers == [
         "No",
-        "Title / Judul",
-        "Year / Tahun",
-        "Type / Tipe",
-        "Quality / Kualitas",
+        "Title",
+        "Year",
+        "Type",
+        "Quality",
         "Rating",
-        "URL / Link",
+        "URL",
     ]
 
 
@@ -79,15 +79,15 @@ def test_format_featured_table_year_extraction():
     column_headers = [col.header for col in table.columns]
     assert column_headers == [
         "No",
-        "Title / Judul",
-        "Year / Tahun",
-        "Type / Tipe",
-        "Quality / Kualitas",
+        "Title",
+        "Year",
+        "Type",
+        "Quality",
         "Rating",
-        "URL / Link",
+        "URL",
     ]
-    assert "Year / Tahun" in column_headers
-    assert "Quality / Kualitas" in column_headers
+    assert "Year" in column_headers
+    assert "Quality" in column_headers
 
 
 def test_print_header():
