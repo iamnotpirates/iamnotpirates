@@ -22,8 +22,12 @@ dev = [
 
 [dependency-groups]
 dev = [
+    "cairosvg>=2.8.2",
+    "pillow>=11.3.0",
     "pyinstaller>=6.21.0",
+    "pymupdf>=1.26.5",
     "pytest>=8.0.0",
+    "svglib>=2.1.0",
 ]
 
 [tool.hatch.build.targets.wheel]
