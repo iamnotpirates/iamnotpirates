@@ -10,8 +10,7 @@ Ditenagai oleh mesin pengunduh **N_m3u8DL-RE** multi-threaded, manajemen databas
 
 ---
 
-## ✨ Fitur Utama
-## ✨ *Key Features*
+## ✨ Fitur Utama / Key Features
 
 - **🔍 Pencarian Media Cepat**:  
   Cari film atau TV Series langsung berdasarkan judul dari CLI via integrasi API internal.  
@@ -66,11 +65,9 @@ Ditenagai oleh mesin pengunduh **N_m3u8DL-RE** multi-threaded, manajemen databas
 
 ---
 
-## 🛠️ Prasyarat & Instalasi
-## 🛠️ *Prerequisites & Installation*
+## 🛠️ Prasyarat & Instalasi / Prerequisites & Installation
 
-### Menggunakan `uv` (Direkomendasikan)
-### *Using `uv` (Recommended)*
+### Menggunakan `uv` (Direkomendasikan) / Using `uv` (Recommended)
 Aplikasi ini dikelola menggunakan **`uv`** (package manager Python yang sangat cepat).  
 *This application is managed using **`uv`** (an ultra-fast Python package manager).*
 
@@ -89,17 +86,14 @@ Aplikasi ini dikelola menggunakan **`uv`** (package manager Python yang sangat c
 
 ---
 
-## 🚀 Panduan Penggunaan
-## 🚀 *Usage Guide*
+## 🚀 Panduan Penggunaan / Usage Guide
 
-### 1. Menjalankan Mode Pengembangan
-### 1. *Running Development Mode*
+### 1. Menjalankan Mode Pengembangan / Running Development Mode
 ```bash
 uv run python src/main.py
 ```
 
-### 2. Menu Utama Interaktif
-### 2. *Interactive Main Menu*
+### 2. Menu Utama Interaktif / Interactive Main Menu
 Setelah dijalankan, Anda akan disambut dengan menu CLI interaktif:  
 *Once launched, you will be presented with an interactive CLI menu:*
 
@@ -124,8 +118,7 @@ Setelah dijalankan, Anda akan disambut dengan menu CLI interaktif:
 
 ---
 
-## 🧪 Pengujian Kode
-## 🧪 *Unit Testing*
+## 🧪 Pengujian Kode / Unit Testing
 
 Proyek ini dibangun menggunakan **Test-Driven Development (TDD)** dengan cakupan pengujian lengkap.  
 *This project is built using **Test-Driven Development (TDD)** with complete test coverage.*
@@ -138,8 +131,7 @@ uv run pytest -v
 
 ---
 
-## 📦 Mengompilasi Binary Executable Standalone (`.exe`)
-## 📦 *Building Standalone Executable*
+## 📦 Mengompilasi Binary Executable Standalone (`.exe`) / Building Standalone Executable
 
 Kompilasi aplikasi menjadi satu binary executable Windows standalone (tanpa butuh instalasi Python):  
 *Compile the application into a single standalone Windows executable binary (no Python installation required):*
@@ -153,8 +145,7 @@ Binary output akan dibuat di `dist/IAmNotPirates.exe`.
 
 ---
 
-## 📁 Struktur Direktori Proyek
-## 📁 *Project Directory Structure*
+## 📁 Struktur Direktori Proyek / Project Directory Structure
 
 ```text
 iamnotpirates/
@@ -180,8 +171,7 @@ iamnotpirates/
 
 ---
 
-## ⚖️ Lisensi & Penafian
-## ⚖️ *License & Disclaimer*
+## ⚖️ Lisensi & Penafian / License & Disclaimer
 
 Aplikasi ini dibuat untuk tujuan pendidikan, penelitian arsitektur scraping, dan Proof of Concept (PoC) saja. Pengguna bertanggung jawab penuh atas penggunaan alat ini sesuai dengan hukum setempat dan ketentuan layanan yang berlaku.  
 *This application is created for educational purposes, scraping architecture research, and Proof of Concept (PoC) only. Users assume full responsibility for using this tool in compliance with applicable local laws and service terms.*
