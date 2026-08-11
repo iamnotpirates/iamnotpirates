@@ -8,17 +8,6 @@
         --slate-dark: #0F172A;
         --shadow-dark: #020617;
       }
-      .bg-base { fill: var(--slate-dark); }
-      .bg-ring { fill: none; stroke: var(--gold-accent); stroke-width: 8; }
-      .bg-inner-ring { fill: none; stroke: var(--primary-red); stroke-width: 3; opacity: 0.6; }
-      .bone-fill { fill: var(--bone-white); stroke: var(--shadow-dark); stroke-width: 6; stroke-linejoin: round; }
-      .skull-fill { fill: var(--bone-white); stroke: var(--shadow-dark); stroke-width: 6; stroke-linejoin: round; }
-      .nose-fill { fill: var(--slate-dark); }
-      .bandana-fill { fill: var(--primary-red); stroke: var(--shadow-dark); stroke-width: 5; stroke-linejoin: round; }
-      .gold-fill { fill: var(--gold-accent); }
-      .play-eye-fill { fill: var(--primary-red); stroke: var(--shadow-dark); stroke-width: 4; stroke-linejoin: round; }
-      .eyepatch-fill { fill: var(--shadow-dark); stroke: var(--gold-accent); stroke-width: 4; }
-      .eyepatch-strap { stroke: var(--shadow-dark); stroke-width: 6; stroke-linecap: round; }
     </style>
     <linearGradient id="bg-grad" x1="0%" y1="0%" x2="100%" y2="100%">
       <stop offset="0%" stop-color="#0F172A"/>
@@ -29,28 +18,28 @@
   <!-- 1. Background Layer -->
   <g id="background-layer">
     <circle cx="256" cy="256" r="240" fill="url(#bg-grad)" />
-    <circle cx="256" cy="256" r="236" class="bg-ring" />
-    <circle cx="256" cy="256" r="226" class="bg-inner-ring" />
+    <circle cx="256" cy="256" r="236" fill="none" stroke="var(--gold-accent)" stroke-width="8" />
+    <circle cx="256" cy="256" r="226" fill="none" stroke="var(--primary-red)" stroke-width="3" opacity="0.6" />
   </g>
 
   <!-- 2. Crossbones Layer -->
   <g id="crossbones-layer">
     <!-- Top-Left to Bottom-Right Crossbone -->
     <g transform="rotate(45, 256, 256)">
-      <rect x="86" y="240" width="340" height="32" rx="16" class="bone-fill" />
-      <circle cx="86" cy="230" r="28" class="bone-fill" />
-      <circle cx="86" cy="282" r="28" class="bone-fill" />
-      <circle cx="426" cy="230" r="28" class="bone-fill" />
-      <circle cx="426" cy="282" r="28" class="bone-fill" />
+      <rect x="86" y="240" width="340" height="32" rx="16" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" stroke-linejoin="round" />
+      <circle cx="86" cy="230" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
+      <circle cx="86" cy="282" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
+      <circle cx="426" cy="230" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
+      <circle cx="426" cy="282" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
     </g>
 
     <!-- Top-Right to Bottom-Left Crossbone -->
     <g transform="rotate(-45, 256, 256)">
-      <rect x="86" y="240" width="340" height="32" rx="16" class="bone-fill" />
-      <circle cx="86" cy="230" r="28" class="bone-fill" />
-      <circle cx="86" cy="282" r="28" class="bone-fill" />
-      <circle cx="426" cy="230" r="28" class="bone-fill" />
-      <circle cx="426" cy="282" r="28" class="bone-fill" />
+      <rect x="86" y="240" width="340" height="32" rx="16" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" stroke-linejoin="round" />
+      <circle cx="86" cy="230" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
+      <circle cx="86" cy="282" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
+      <circle cx="426" cy="230" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
+      <circle cx="426" cy="282" r="28" fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" />
     </g>
   </g>
 
@@ -67,11 +56,11 @@
              L 196,330
              C 196,310 192,298 186,290
              C 172,270 160,240 160,200 Z"
-          class="skull-fill" />
+          fill="var(--bone-white)" stroke="var(--shadow-dark)" stroke-width="6" stroke-linejoin="round" />
 
     <g id="skull-teeth">
       <path d="M 218,340 L 218,365 M 243,340 L 243,365 M 269,340 L 269,365 M 294,340 L 294,365"
-            stroke="#020617" stroke-width="4" stroke-linecap="round" />
+            stroke="var(--shadow-dark)" stroke-width="4" stroke-linecap="round" />
     </g>
 
     <path d="M 256,280
@@ -79,19 +68,19 @@
              C 238,286 256,302 256,302
              C 256,302 274,286 274,276
              C 274,266 262,268 256,280 Z"
-          class="nose-fill" />
+          fill="var(--slate-dark)" />
   </g>
 
   <!-- 4. Media Play Eye Layer -->
   <g id="media-play-eye-layer">
-    <line x1="165" y1="185" x2="250" y2="245" class="eyepatch-strap" />
-    <circle cx="215" cy="220" r="32" class="eyepatch-fill" />
+    <line x1="165" y1="185" x2="250" y2="245" stroke="var(--shadow-dark)" stroke-width="6" stroke-linecap="round" />
+    <circle cx="215" cy="220" r="32" fill="var(--slate-dark)" stroke="var(--gold-accent)" stroke-width="4" />
     <path d="M 200,210 L 225,220 L 200,230 Z" fill="var(--gold-accent)" />
 
     <path d="M 282,198
              L 322,220
              L 282,242 Z"
-          class="play-eye-fill" />
+          fill="var(--primary-red)" stroke="var(--shadow-dark)" stroke-width="4" stroke-linejoin="round" />
   </g>
 
   <!-- 5. Bandana Accents Layer -->
@@ -101,19 +90,20 @@
              C 322,128 360,145 358,195
              C 335,180 295,172 256,172
              C 217,172 177,180 154,195 Z"
-          class="bandana-fill" />
+          fill="var(--primary-red)" stroke="var(--shadow-dark)" stroke-width="5" stroke-linejoin="round" />
 
     <path d="M 154,195 C 190,182 225,178 256,178 C 287,178 322,182 358,195"
           fill="none" stroke="var(--gold-accent)" stroke-width="4" />
 
     <g id="bandana-knot">
-      <circle cx="145" cy="195" r="14" class="bandana-fill" />
-      <circle cx="145" cy="195" r="6" class="gold-fill" />
-      <path d="M 140,205 C 120,225 110,250 118,270 C 128,260 135,235 145,215 Z" class="bandana-fill" />
-      <path d="M 135,198 C 110,205 90,220 85,238 C 100,232 118,222 135,210 Z" class="bandana-fill" />
+      <circle cx="145" cy="195" r="14" fill="var(--primary-red)" stroke="var(--shadow-dark)" stroke-width="4" />
+      <circle cx="145" cy="195" r="6" fill="var(--gold-accent)" />
+      <path d="M 140,205 C 120,225 110,250 118,270 C 128,260 135,235 145,215 Z" fill="var(--primary-red)" stroke="var(--shadow-dark)" stroke-width="3" />
+      <path d="M 135,198 C 110,205 90,220 85,238 C 100,232 118,222 135,210 Z" fill="var(--primary-red)" stroke="var(--shadow-dark)" stroke-width="3" />
     </g>
 
-    <circle cx="256" cy="150" r="12" class="gold-fill" stroke="var(--shadow-dark)" stroke-width="2" />
+    <circle cx="256" cy="150" r="12" fill="var(--gold-accent)" stroke="var(--shadow-dark)" stroke-width="2" />
     <path d="M 256,143 L 259,148 L 264,150 L 259,152 L 256,157 L 253,152 L 248,150 L 253,148 Z" fill="var(--slate-dark)" />
   </g>
 </svg>
+
