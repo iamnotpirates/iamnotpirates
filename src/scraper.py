@@ -8,6 +8,19 @@ def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
     items = []
     seen_urls = set()
 
+    # Build HTML rating lookup map
+    rating_map = {}
+    for card in soup.select("article.item, div.post, div.item, .hero-content-overlay, .slider-item, div.poster, .meta"):
+        a_tag = card.select_one("a[href]")
+        if not a_tag:
+            continue
+        href = a_tag.get("href", "")
+        rating_tag = card.select_one(".rating, .imdb, .vote, span.rating, div.rating")
+        if rating_tag:
+            r_text = rating_tag.get_text(strip=True)
+            if r_text:
+                rating_map[href] = r_text
+
     # Strategy 1: JSON-LD Schema ItemList (Featured Movies & TV Series)
     ld_scripts = soup.find_all("script", type="application/ld+json")
     for s in ld_scripts:
@@ -28,10 +41,14 @@ def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
                                 full_url = base_url.rstrip("/") + url
                             is_tv = "/series/" in url or "/tvshows/" in url
                             seen_urls.add(url)
+                            agg_rating = elem.get("aggregateRating")
+                            rating_val = agg_rating.get("ratingValue") if isinstance(agg_rating, dict) else None
+                            if not rating_val:
+                                rating_val = rating_map.get(url) or rating_map.get(full_url) or "N/A"
                             items.append({
                                 "title": title,
                                 "url": full_url,
-                                "rating": "N/A",
+                                "rating": str(rating_val),
                                 "type": "TV Series" if is_tv else "Movie",
                                 "quality": "WEB-DL",
                                 "poster": ""

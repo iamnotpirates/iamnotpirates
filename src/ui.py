@@ -27,12 +27,12 @@ def format_featured_table(items: list[dict]) -> Table:
         expand=True,
     )
     table.add_column("No", justify="right", style="cyan", no_wrap=True)
-    table.add_column("Title / Judul", style="bold white", no_wrap=False, ratio=3)
+    table.add_column("Title / Judul", style="bold white", min_width=30, max_width=45, no_wrap=False)
     table.add_column("Year / Tahun", justify="center", style="yellow", no_wrap=True)
     table.add_column("Type / Tipe", style="green", justify="center", no_wrap=True)
     table.add_column("Quality / Kualitas", justify="center", style="bold green", no_wrap=True)
     table.add_column("Rating", justify="center", style="yellow", no_wrap=True)
-    table.add_column("URL / Link", style="blue underline", no_wrap=True, ratio=2)
+    table.add_column("URL / Link", style="blue underline", no_wrap=True)
 
     for idx, item in enumerate(items, start=1):
         raw_title = item.get("title", "N/A")
