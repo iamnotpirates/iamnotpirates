@@ -495,9 +495,9 @@ def handle_retry_failed(active_url: str, config: dict) -> None:
 
 def handle_featured(active_url: str) -> None:
     config = load_config()
-    console.print("\n[bold cyan]Fetching featured content...[/bold cyan]")
     try:
-        items = fetch_featured_content(active_url)
+        with console.status("[bold cyan]🔥 Fetching featured content... / Mengambil konten populer...[/bold cyan]", spinner="dots"):
+            items = fetch_featured_content(active_url)
         if not items:
             console.print("[yellow]No featured content found or website structure differed.[/yellow]")
         else:
@@ -633,8 +633,8 @@ def handle_search(active_url: str, config: dict) -> None:
         if not query or not query.strip():
             return
 
-        console.print(f"\n[bold cyan]Mencari \"{query.strip()}\"...[/bold cyan]")
-        items = search_content(active_url, query.strip())
+        with console.status(f"[bold cyan]🔍 Searching for \"{query.strip()}\"... / Mencari \"{query.strip()}\"...[/bold cyan]", spinner="dots"):
+            items = search_content(active_url, query.strip())
         if not items:
             console.print(f"[yellow]Tidak ada hasil ditemukan untuk \"{query.strip()}\".[/yellow]")
         else:
