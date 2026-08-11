@@ -8,105 +8,56 @@ def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
     items = []
     seen_urls = set()
 
-    # Build HTML rating lookup map
-    rating_map = {}
-    for card in soup.select("article.item, div.post, div.item, .hero-content-overlay, .slider-item, div.poster, .meta"):
-        a_tag = card.select_one("a[href]")
-        if not a_tag:
+    # Strategy 1: Hero Carousel / Featured Content section in Next.js layout (Rich metadata & real ratings)
+    hero_sections = soup.select(
+        'section[aria-label="Featured content"], section[aria-label="Konten Pilihan"], section.hero-height, .hero-content-overlay'
+    )
+    for hero in hero_sections:
+        link_tag = hero.select_one("a[href*='/movie/'], a[href*='/series/'], a[href*='/tvshows/'], a[href]")
+        if not link_tag:
             continue
-        href = a_tag.get("href", "")
-        rating_tag = card.select_one(".rating, .imdb, .vote, span.rating, div.rating")
-        if rating_tag:
-            r_text = rating_tag.get_text(strip=True)
-            if r_text:
-                rating_map[href] = r_text
 
-    # Strategy 1: JSON-LD Schema ItemList (Featured Movies & TV Series)
-    ld_scripts = soup.find_all("script", type="application/ld+json")
-    for s in ld_scripts:
-        if not s.string:
+        href = link_tag.get("href", "")
+        if not href or href in seen_urls:
             continue
-        try:
-            data = json.loads(s.string)
-            if isinstance(data, list):
-                for obj in data:
-                    if obj.get("@type") == "ItemList" and "Featured" in obj.get("name", ""):
-                        for elem in obj.get("itemListElement", []):
-                            url = elem.get("url", "")
-                            title = elem.get("name", "")
-                            if not url or url in seen_urls:
-                                continue
-                            full_url = url
-                            if base_url and url.startswith("/"):
-                                full_url = base_url.rstrip("/") + url
-                            is_tv = "/series/" in url or "/tvshows/" in url
-                            seen_urls.add(url)
-                            agg_rating = elem.get("aggregateRating")
-                            rating_val = agg_rating.get("ratingValue") if isinstance(agg_rating, dict) else None
-                            if not rating_val:
-                                rating_val = rating_map.get(url) or rating_map.get(full_url) or "N/A"
-                            items.append({
-                                "title": title,
-                                "url": full_url,
-                                "rating": str(rating_val),
-                                "type": "TV Series" if is_tv else "Movie",
-                                "quality": "WEB-DL",
-                                "poster": ""
-                            })
-        except Exception:
-            pass
 
-    # Strategy 2: Hero Carousel / Featured Content section in Next.js layout
-    if not items:
-        hero_sections = soup.select(
-            'section[aria-label="Featured content"], section[aria-label="Konten Pilihan"], section.hero-height, .hero-content-overlay'
+        img_tag = hero.select_one("img[alt]")
+        title = img_tag.get("alt", "") if img_tag else link_tag.get_text(strip=True)
+        if not title:
+            title = href.strip("/").split("/")[-1].replace("-", " ").title()
+
+        type_span = hero.select_one("span")
+        type_text = type_span.get_text(strip=True).upper() if type_span else ""
+        if "SERIES" in type_text or "TV" in type_text or "/series/" in href:
+            content_type = "TV Series"
+        else:
+            content_type = "Movie"
+
+        rating = "N/A"
+        for span in hero.select("span"):
+            txt = span.get_text(strip=True)
+            if txt and (txt.replace(".", "", 1).isdigit() or "★" in txt):
+                rating = txt
+                break
+
+        poster = img_tag.get("src", "") if img_tag else ""
+
+        full_url = href
+        if base_url and href.startswith("/"):
+            full_url = base_url.rstrip("/") + href
+
+        seen_urls.add(href)
+        items.append(
+            {
+                "title": title,
+                "url": full_url,
+                "rating": rating,
+                "type": content_type,
+                "poster": poster,
+            }
         )
-        for hero in hero_sections:
-            link_tag = hero.select_one("a[href*='/movie/'], a[href*='/series/'], a[href*='/tvshows/'], a[href]")
-            if not link_tag:
-                continue
 
-            href = link_tag.get("href", "")
-            if not href or href in seen_urls:
-                continue
-
-            img_tag = hero.select_one("img[alt]")
-            title = img_tag.get("alt", "") if img_tag else link_tag.get_text(strip=True)
-            if not title:
-                title = href.strip("/").split("/")[-1].replace("-", " ").title()
-
-            type_span = hero.select_one("span")
-            type_text = type_span.get_text(strip=True).upper() if type_span else ""
-            if "SERIES" in type_text or "TV" in type_text or "/series/" in href:
-                content_type = "TV Series"
-            else:
-                content_type = "Movie"
-
-            rating = "N/A"
-            for span in hero.select("span"):
-                txt = span.get_text(strip=True)
-                if txt and (txt.replace(".", "", 1).isdigit() or "★" in txt):
-                    rating = txt
-                    break
-
-            poster = img_tag.get("src", "") if img_tag else ""
-
-            full_url = href
-            if base_url and href.startswith("/"):
-                full_url = base_url.rstrip("/") + href
-
-            seen_urls.add(href)
-            items.append(
-                {
-                    "title": title,
-                    "url": full_url,
-                    "rating": rating,
-                    "type": content_type,
-                    "poster": poster,
-                }
-            )
-
-    # Strategy 3: Try finding featured section or general item cards in DooPlay/WordPress theme
+    # Strategy 2: DooPlay/WordPress theme item cards
     if not items:
         containers = soup.select(
             "#featured-titles article.item, div.items article.item, #archive-content article.item, article.item"
@@ -140,6 +91,40 @@ def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
                         "poster": poster,
                     }
                 )
+
+    # Strategy 3: JSON-LD Schema ItemList fallback
+    if not items:
+        ld_scripts = soup.find_all("script", type="application/ld+json")
+        for s in ld_scripts:
+            if not s.string:
+                continue
+            try:
+                data = json.loads(s.string)
+                if isinstance(data, list):
+                    for obj in data:
+                        if obj.get("@type") == "ItemList" and "Featured" in obj.get("name", ""):
+                            for elem in obj.get("itemListElement", []):
+                                url = elem.get("url", "")
+                                title = elem.get("name", "")
+                                if not url or url in seen_urls:
+                                    continue
+                                full_url = url
+                                if base_url and url.startswith("/"):
+                                    full_url = base_url.rstrip("/") + url
+                                is_tv = "/series/" in url or "/tvshows/" in url
+                                seen_urls.add(url)
+                                agg_rating = elem.get("aggregateRating")
+                                rating_val = agg_rating.get("ratingValue") if isinstance(agg_rating, dict) else None
+                                items.append({
+                                    "title": title,
+                                    "url": full_url,
+                                    "rating": str(rating_val) if rating_val else "N/A",
+                                    "type": "TV Series" if is_tv else "Movie",
+                                    "quality": "WEB-DL",
+                                    "poster": ""
+                                })
+            except Exception:
+                pass
 
     # Strategy 4: Next.js / Dynamic catalog fallback
     if not items:
