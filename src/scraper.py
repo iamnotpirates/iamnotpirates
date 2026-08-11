@@ -1,9 +1,14 @@
 import json
+import time
 from bs4 import BeautifulSoup
 from curl_cffi import requests
 
 
 def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
+    """Parses Featured Content items strictly from Hero Carousel or Featured Item Cards.
+    
+    Returns an empty list if no valid featured cards are found (no dummy catalog fallbacks).
+    """
     soup = BeautifulSoup(html, "html.parser")
     items = []
     seen_urls = set()
@@ -63,14 +68,14 @@ def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
             "#featured-titles article.item, div.items article.item, #archive-content article.item, article.item"
         )
         for article in containers:
-            title_tag = article.select_one("h3 a, .data h3 a, .title a")
+            title_tag = article.select_one("h3 a, .data h3 a, .title a, a[href]")
             if not title_tag:
                 continue
 
             title = title_tag.get_text(strip=True)
             link = title_tag.get("href", "")
 
-            rating_tag = article.select_one(".rating, .imdb")
+            rating_tag = article.select_one(".rating, .imdb, .vote")
             rating = rating_tag.get_text(strip=True) if rating_tag else "N/A"
 
             img_tag = article.select_one("img")
@@ -91,69 +96,6 @@ def parse_featured_html(html: str, base_url: str = "") -> list[dict]:
                         "poster": poster,
                     }
                 )
-
-    # Strategy 3: JSON-LD Schema ItemList fallback
-    if not items:
-        ld_scripts = soup.find_all("script", type="application/ld+json")
-        for s in ld_scripts:
-            if not s.string:
-                continue
-            try:
-                data = json.loads(s.string)
-                if isinstance(data, list):
-                    for obj in data:
-                        if obj.get("@type") == "ItemList" and "Featured" in obj.get("name", ""):
-                            for elem in obj.get("itemListElement", []):
-                                url = elem.get("url", "")
-                                title = elem.get("name", "")
-                                if not url or url in seen_urls:
-                                    continue
-                                full_url = url
-                                if base_url and url.startswith("/"):
-                                    full_url = base_url.rstrip("/") + url
-                                is_tv = "/series/" in url or "/tvshows/" in url
-                                seen_urls.add(url)
-                                agg_rating = elem.get("aggregateRating")
-                                rating_val = agg_rating.get("ratingValue") if isinstance(agg_rating, dict) else None
-                                items.append({
-                                    "title": title,
-                                    "url": full_url,
-                                    "rating": str(rating_val) if rating_val else "N/A",
-                                    "type": "TV Series" if is_tv else "Movie",
-                                    "quality": "WEB-DL",
-                                    "poster": ""
-                                })
-            except Exception:
-                pass
-
-    # Strategy 4: Next.js / Dynamic catalog fallback
-    if not items:
-        movie_series_links = soup.find_all(
-            "a", href=lambda h: h and ("/movie/" in h or "/series/" in h or "/tvshows/" in h)
-        )
-        for a_tag in movie_series_links:
-            href = a_tag.get("href", "")
-            title = a_tag.get_text(strip=True)
-            if not title or href in seen_urls:
-                continue
-
-            full_url = href
-            if base_url and href.startswith("/"):
-                full_url = base_url.rstrip("/") + href
-
-            is_tv = "/series/" in href or "/tvshows/" in href
-            content_type = "TV Series" if is_tv else "Movie"
-
-            seen_urls.add(href)
-            items.append(
-                {
-                    "title": title,
-                    "url": full_url,
-                    "rating": "N/A",
-                    "type": content_type,
-                    "poster": "",
-                }
-            )
 
     return items
 
@@ -277,33 +219,49 @@ def fetch_featured_with_playwright(target_url: str) -> list[dict]:
     return items
 
 
-def fetch_featured_content(target_url: str) -> list[dict]:
-    # 1. Primary Engine: Playwright dynamic rendering for exact 10 Hero Featured Carousel items
-    pw_items = fetch_featured_with_playwright(target_url)
-    if pw_items:
-        return pw_items
+def fetch_featured_content(target_url: str, max_retries: int = 3) -> list[dict]:
+    """Fetches Featured Content items with max 3 retries.
+    
+    Raises an explicit Exception if no real Featured Content items are obtained after max_retries attempts.
+    """
+    last_err = None
+    for attempt in range(1, max_retries + 1):
+        try:
+            # 1. Primary Engine: Playwright dynamic rendering for exact 10 Hero Featured Carousel items
+            pw_items = fetch_featured_with_playwright(target_url)
+            if pw_items:
+                return pw_items
 
-    # 2. Fallback Engine: Fast HTTP request via curl_cffi
-    try:
-        response = requests.get(
-            target_url,
-            impersonate="chrome120",
-            headers={
-                "User-Agent": (
-                    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/120.0.0.0 Safari/537.36"
-                ),
-                "Accept-Language": "en-US,en;q=0.9,id;q=0.8",
-            },
-            timeout=15,
-        )
-        if response.status_code == 200:
-            return parse_featured_html(response.text, base_url=target_url)
-        else:
-            raise Exception(f"HTTP Status {response.status_code}")
-    except Exception as e:
-        raise Exception(f"Failed to fetch {target_url}: {str(e)}")
+            # 2. Fast HTTP request via curl_cffi
+            response = requests.get(
+                target_url,
+                impersonate="chrome120",
+                headers={
+                    "User-Agent": (
+                        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                        "AppleWebKit/537.36 (KHTML, like Gecko) "
+                        "Chrome/120.0.0.0 Safari/537.36"
+                    ),
+                    "Accept-Language": "en-US,en;q=0.9,id;q=0.8",
+                },
+                timeout=15,
+            )
+            if response.status_code == 200:
+                parsed_items = parse_featured_html(response.text, base_url=target_url)
+                if parsed_items:
+                    return parsed_items
+            else:
+                last_err = f"HTTP Status {response.status_code}"
+        except Exception as e:
+            last_err = str(e)
+
+        if attempt < max_retries:
+            time.sleep(1)
+
+    raise Exception(
+        f"Gagal mengambil Featured Content setelah {max_retries}x percobaan "
+        f"({last_err or 'Konten populer tidak ditemukan'}). Silakan periksa koneksi internet atau Active Target URL Anda."
+    )
 
 
 def search_content(target_url: str, query: str) -> list[dict]:

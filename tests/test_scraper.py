@@ -62,14 +62,9 @@ def test_parse_featured_html():
     assert items[1]["poster"] == "https://image.tmdb.org/t/p/w185/poster2.jpg"
 
 
-def test_parse_featured_html_fallback_and_defaults():
-    items = parse_featured_html(MOCK_HTML_FALLBACK)
-    assert len(items) == 1
-    assert items[0]["title"] == "Fallback Movie"
-    assert items[0]["url"] == "https://z2.idlixku.com/movie/fallback-movie/"
-    assert items[0]["rating"] == "N/A"
-    assert items[0]["type"] == "Movie"
-    assert items[0]["poster"] == ""
+def test_parse_featured_html_empty_when_no_cards():
+    items = parse_featured_html("<html><body><div>No items here</div></body></html>")
+    assert items == []
 
 
 @patch("src.scraper.fetch_featured_with_playwright")
@@ -94,7 +89,7 @@ def test_fetch_featured_content_http_error(mock_get, mock_pw):
     mock_response.status_code = 403
     mock_get.return_value = mock_response
 
-    with pytest.raises(Exception, match="HTTP Status 403"):
+    with pytest.raises(Exception, match="Gagal mengambil Featured Content setelah 3x percobaan"):
         fetch_featured_content("https://z2.idlixku.com/")
 
 
