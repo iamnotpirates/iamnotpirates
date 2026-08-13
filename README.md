@@ -4,7 +4,7 @@
 
 # 🏴‍☠️ I Am Not Pirates — CLI Media Scraper & Downloader
 
-![Version](https://img.shields.io/badge/version-v1.1.0-blue)
+![Version](https://img.shields.io/badge/version-v1.2.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%2064--bit-0078D6?logo=windows)
 
 A high-performance, modern interactive Python CLI application to browse, search, and automatically download Movies and TV Series.  

@@ -67,7 +67,7 @@ def ensure_playwright(console=None) -> bool:
         except Exception:
             pass
 
-    msg = "[bold cyan][Playwright] Menyiapkan browser scraper Chromium untuk pertama kali...[/bold cyan]"
+    msg = "[bold cyan][3/3] 🌐 Playwright Chromium tidak ditemukan. Menyiapkan browser scraper...[/bold cyan]"
     if console is not None:
         console.print(msg)
     else:
@@ -99,4 +99,14 @@ def ensure_playwright(console=None) -> bool:
         except Exception:
             pass
 
-    return is_chromium_installed()
+    installed = is_chromium_installed()
+    if installed:
+        success_msg = f"[bold green]✓ Playwright Chromium terpasang di: {browsers_path}[/bold green]"
+        if console is not None:
+            console.print(success_msg)
+        else:
+            try:
+                rprint(success_msg)
+            except Exception:
+                print(f"✓ Playwright Chromium terpasang di: {browsers_path}")
+    return installed

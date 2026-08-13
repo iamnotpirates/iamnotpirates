@@ -47,7 +47,7 @@ def ensure_binary(console=None) -> str | None:
         else:
             print(msg)
 
-    _print("[N_m3u8DL-RE] Binary not found. Downloading from GitHub releases…")
+    _print("[bold cyan][1/3] ⚙️ N_m3u8DL-RE tidak ditemukan. Mengunduh dari GitHub Releases...[/bold cyan]")
 
     try:
         # Fetch latest release metadata
@@ -71,7 +71,7 @@ def ensure_binary(console=None) -> str | None:
             _print("[N_m3u8DL-RE] Could not find a win-x64 zip asset in the latest release.")
             return None
 
-        _print(f"[N_m3u8DL-RE] Downloading: {zip_url}")
+        _print(f"[dim white]⏳ Mengunduh: {zip_url}[/dim white]")
         zip_resp = requests.get(zip_url, impersonate="chrome120")
         if zip_resp.status_code != 200:
             _print(f"[N_m3u8DL-RE] Zip download failed: HTTP {zip_resp.status_code}")
@@ -82,7 +82,7 @@ def ensure_binary(console=None) -> str | None:
         with zipfile.ZipFile(io.BytesIO(zip_resp.content)) as zf:
             zf.extract(_BINARY_NAME, path=os.path.dirname(binary_path))
 
-        _print(f"[N_m3u8DL-RE] Binary cached at: {binary_path}")
+        _print(f"[bold green]✓ N_m3u8DL-RE terpasang di: {binary_path}[/bold green]")
         return binary_path
 
     except Exception as exc:

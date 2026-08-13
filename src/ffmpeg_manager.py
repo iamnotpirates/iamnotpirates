@@ -48,12 +48,13 @@ def ensure_ffmpeg(console=None) -> tuple[str | None, str | None]:
         else:
             print(msg)
 
-    _print("[FFmpeg] Binaries not found. Downloading static build from GitHub releases…")
+    _print("[bold cyan][2/3] 🎥 FFmpeg & FFprobe tidak ditemukan. Mengunduh static build...[/bold cyan]")
 
     try:
         bin_dir = os.path.dirname(ffmpeg_path)
         os.makedirs(bin_dir, exist_ok=True)
 
+        _print(f"[dim white]⏳ Mengunduh: {_DOWNLOAD_URL}[/dim white]")
         resp = requests.get(_DOWNLOAD_URL, impersonate="chrome120")
         if resp.status_code != 200:
             _print(f"[FFmpeg] Zip download failed: HTTP {resp.status_code}")
@@ -68,7 +69,7 @@ def ensure_ffmpeg(console=None) -> tuple[str | None, str | None]:
                         target.write(source.read())
 
         if os.path.exists(ffmpeg_path) and os.path.exists(ffprobe_path):
-            _print(f"[FFmpeg] Binaries cached at: {bin_dir}")
+            _print(f"[bold green]✓ FFmpeg & FFprobe terpasang di: {bin_dir}[/bold green]")
             return ffmpeg_path, ffprobe_path
 
         _print("[FFmpeg] Failed to locate binaries in extracted archive.")

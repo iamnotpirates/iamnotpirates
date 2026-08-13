@@ -79,9 +79,9 @@ def test_ensure_playwright_downloads_when_missing(monkeypatch, tmp_path):
         result = ensure_playwright(console=console)
 
         assert result is True
-        console.print.assert_called_once_with(
-            "[bold cyan][Playwright] Menyiapkan browser scraper Chromium untuk pertama kali...[/bold cyan]"
-        )
+        assert console.print.call_count == 2
+        first_call_arg = console.print.call_args_list[0][0][0]
+        assert "[3/3]" in first_call_arg or "Playwright Chromium" in first_call_arg
         mock_run.assert_called_once_with(
             [sys.executable, "-m", "playwright", "install", "chromium"],
             check=False,

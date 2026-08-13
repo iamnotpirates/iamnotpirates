@@ -107,7 +107,7 @@ def test_print_header():
     output = buf.getvalue()
 
     assert "I AM NOT PIRATES" in output
-    assert "Streaming & Media Explorer / Penjelajah Media v1.1.0" in output
+    assert "Streaming & Media Explorer / Penjelajah Media v1.2.0" in output
     assert "https://z2.idlixku.com/" in output
 
 
@@ -202,4 +202,17 @@ def test_print_download_summary_rendering():
     assert "Episode 1" in output
     assert "Episode 2" in output
     assert "No m3u8" in output
+
+
+def test_print_startup_dependency_notice():
+    from src.ui import print_startup_dependency_notice
+
+    buf = StringIO()
+    console = Console(file=buf, force_terminal=True, width=160)
+    print_startup_dependency_notice(console=console)
+    output = buf.getvalue()
+
+    assert "System Dependency Check" in output
+    assert "sekali" in output.lower()
+
 

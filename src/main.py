@@ -5,13 +5,16 @@ import questionary
 from rich.console import Console
 
 from src.db_manager import init_db
-from src.ffmpeg_manager import ensure_ffmpeg, verify_media_file
+from src.ffmpeg_manager import ensure_ffmpeg, verify_media_file, get_ffmpeg_paths
 from src.config_manager import (
     load_config, save_config, add_target_url, set_active_url, delete_target_url,
     get_download_dir, set_download_dir, set_organize_mode
 )
 from src.scraper import fetch_featured_content, search_content
-from src.ui import print_header, format_featured_table, print_error, print_success, print_download_summary
+from src.ui import (
+    print_header, format_featured_table, print_error, print_success,
+    print_download_summary, print_startup_dependency_notice
+)
 from src.video_extractor import extract_video_sources
 from src.downloader import (
     download_media_stream,
@@ -23,8 +26,8 @@ from src.downloader import (
 )
 from src.series_extractor import fetch_series_details, extract_episode_sources
 from src.download_log import add_entry, get_failed_entries, update_entry, format_log_table, is_already_downloaded
-from src.n_m3u8dl_manager import download_with_re, ensure_binary
-from src.playwright_manager import ensure_playwright
+from src.n_m3u8dl_manager import download_with_re, ensure_binary, get_binary_path
+from src.playwright_manager import ensure_playwright, is_chromium_installed
 
 if hasattr(sys.stdout, "reconfigure"):
     try:
@@ -659,10 +662,24 @@ def handle_search(active_url: str, config: dict) -> None:
                 break
 
 def main() -> None:
+    if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v", "version"):
+        console.print("I Am Not Pirates v1.2.0")
+        return
+
     init_db()
+
+    has_n_m3u8 = os.path.exists(get_binary_path())
+    ffmpeg_p, ffprobe_p = get_ffmpeg_paths()
+    has_ffmpeg = os.path.exists(ffmpeg_p) and os.path.exists(ffprobe_p)
+    has_playwright = is_chromium_installed()
+
+    if not (has_n_m3u8 and has_ffmpeg and has_playwright):
+        print_startup_dependency_notice(console)
+
     ensure_binary(console)
     ensure_ffmpeg(console)
     ensure_playwright(console)
+
     while True:
         config = load_config()
         active_url = config.get("active_url", "")

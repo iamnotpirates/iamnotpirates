@@ -10,9 +10,9 @@ def print_header(active_url: str, console: Console | None = None) -> None:
         console = Console()
     console.clear()
     panel = Panel(
-        f"[bold cyan]I AM NOT PIRATES CLI v1.1.0[/bold cyan]\nTarget URL: [yellow]{active_url}[/yellow]",
+        f"[bold cyan]I AM NOT PIRATES CLI v1.2.0[/bold cyan]\nTarget URL: [yellow]{active_url}[/yellow]",
         title="[bold green]I AM NOT PIRATES[/bold green]",
-        subtitle="Streaming & Media Explorer / Penjelajah Media v1.1.0",
+        subtitle="Streaming & Media Explorer / Penjelajah Media v1.2.0",
         border_style="magenta",
     )
     console.print(panel)
@@ -174,4 +174,25 @@ def print_download_summary(summary_data: dict, console: Console | None = None) -
     if summary_data.get("items"):
         table = format_download_summary_table(summary_data["items"])
         console.print(table)
+
+
+def print_startup_dependency_notice(console: Console | None = None) -> None:
+    """Prints a prominent Rich panel explaining system dependency checks & auto-downloads."""
+    if console is None:
+        console = Console()
+
+    content = (
+        "[bold cyan]Memeriksa komponen pendukung sistem (N_m3u8DL-RE, FFmpeg, Playwright Chromium)...[/bold cyan]\n"
+        "[dim white]💡 Catatan: Komponen yang belum ada akan diunduh secara otomatis.\n"
+        "   Pengunduhan ini [bold yellow]HANYA DILAKUKAN SEKALI[/bold yellow] saat pertama kali aplikasi dijalankan.[/dim white]"
+    )
+
+    panel = Panel(
+        content,
+        title="[bold green]🔍 System Dependency Check / Pemeriksaan Komponen Sistem[/bold green]",
+        border_style="cyan",
+        expand=True,
+    )
+    console.print(panel)
+
 
