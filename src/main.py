@@ -969,7 +969,7 @@ def handle_search(active_url: str, config: dict) -> None:
 
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v", "version"):
-        console.print("I Am Not Pirates v1.2.0")
+        console.print("I Am Not Pirates v1.3.0")
         return
 
     init_db()

@@ -107,7 +107,7 @@ def test_print_header():
     output = buf.getvalue()
 
     assert "I AM NOT PIRATES" in output
-    assert "Streaming & Media Explorer / Penjelajah Media v1.2.0" in output
+    assert "Streaming & Media Explorer / Penjelajah Media v1.3.0" in output
     assert "https://z2.idlixku.com/" in output
 
 

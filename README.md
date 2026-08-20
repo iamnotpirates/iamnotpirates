@@ -4,7 +4,7 @@
 
 # 🏴‍☠️ I Am Not Pirates — CLI Media Scraper & Downloader
 
-![Version](https://img.shields.io/badge/version-v1.2.0-blue)
+![Version](https://img.shields.io/badge/version-v1.3.0-blue)
 ![Platform](https://img.shields.io/badge/platform-Windows%2064--bit-0078D6?logo=windows)
 
 A high-performance, modern interactive Python CLI application to browse, search, and automatically download Movies and TV Series.  
@@ -43,6 +43,8 @@ Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite
     *(Mengunduh HLS/DASH `.m3u8` stream dengan 16 thread paralel.)*
   - Automatically fetches and manages official `N_m3u8DL-RE.exe` binary under `~/.iamnotpirates/bin/` on first run.  
     *(Mengunduh dan mengelola binary resmi `N_m3u8DL-RE.exe` secara otomatis di bawah `~/.iamnotpirates/bin/` saat pertama kali dijalankan.)*
+  - **Auto-Heal & Windows File Lock Handling** (*Auto-Heal & Penanganan Lock File Windows*): Automatically detects and recovers `.MUX.mp4` leftover files with a 5x retry loop, and handles locked temporary `.ts` files gracefully during cleanup.  
+    *(Mendeteksi dan memulihkan sisa file `.MUX.mp4` secara otomatis dengan perulangan retry 5x, dan mengabaikan kegagalan akibat file `.ts` sementara yang terkunci.)*
   - Clean cancellation handling via `Ctrl + C`.  
     *(Penanganan pembatalan bersih via `Ctrl + C`.)*
 
@@ -55,6 +57,8 @@ Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite
 - **📝 Automatic Subtitle Conversion** (*Konversi Subtitle Otomatis*):
   - Downloads multi-language VTT/SRT subtitles (`.id.srt` & `.en.srt`).  
     *(Mengunduh subtitle VTT/SRT multi-bahasa `.id.srt` & `.en.srt`.)*
+  - **Pre-Scraping Movie Subtitle Choice** (*Pemilihan Subtitle Movie Di Awal*): Allows choosing subtitles before movie video scraping starts to streamline the download flow.  
+    *(Memungkinkan pemilihan subtitle sebelum scraping video film untuk merampingkan alur unduhan.)*
   - Automatically associated with media files matching Jellyfin/Plex conventions.  
     *(Otomatis diasosiasikan dengan file media sesuai konvensi Jellyfin/Plex.)*
 
@@ -65,6 +69,8 @@ Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite
 - **🛡️ Smart FFmpeg Auto-Healing System** (*Sistem FFmpeg Auto-Healing Pintar*):
   - Auto-downloads official `ffmpeg.exe` & `ffprobe.exe` binaries to `~/.iamnotpirates/bin/`.  
     *(Auto-download binary resmi `ffmpeg.exe` & `ffprobe.exe` ke `~/.iamnotpirates/bin/`.)*
+  - **Instant Local Check** (*Pengecekan File Lokal Instan*): Instantly verifies local files (Movies/TV Series) **before** executing any web scraper. Bypasses extraction entirely if the file is present and healthy, saving bandwidth and time.  
+    *(Memverifikasi file lokal sebelum menjalankan scraper. Melewati ekstraksi sepenuhnya jika file ada dan sehat, menghemat bandwidth dan waktu.)*
   - **3-Level Health Check** (*Pengecekan Kesehatan 3-Level*):
     - **Corrupt Video (0-Byte)** (*Video Rusak / 0-Byte*): Automatically deletes corrupted files and re-downloads video + subtitles.  
       *(Otomatis menghapus file rusak dan mendownload ulang video + subtitle.)*

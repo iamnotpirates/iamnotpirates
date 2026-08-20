@@ -103,7 +103,8 @@ def test_download_log_operations(tmp_path):
         "title": "Inception",
         "status": "success",
         "m3u8_url": "http://example.com/inception.m3u8",
-        "output_path": "/path/Inception.mp4"
+        "output_path": "/path/Inception.mp4",
+        "page_url": "https://z2.idlixku.com/movie/inception/"
     }
     db_manager.add_entry(entry1, db_path=db_file)
 
@@ -115,6 +116,7 @@ def test_download_log_operations(tmp_path):
         episode=1,
         status="failed",
         error="Network error",
+        page_url="https://z2.idlixku.com/series/breaking-bad/",
         db_path=db_file
     )
 
@@ -122,9 +124,11 @@ def test_download_log_operations(tmp_path):
     assert len(logs) == 2
     assert logs[0]["title"] == "Inception"
     assert logs[0]["status"] == "success"
+    assert logs[0]["page_url"] == "https://z2.idlixku.com/movie/inception/"
     assert logs[1]["title"] == "Breaking Bad"
     assert logs[1]["status"] == "failed"
     assert logs[1]["error"] == "Network error"
+    assert logs[1]["page_url"] == "https://z2.idlixku.com/series/breaking-bad/"
 
     failed = db_manager.get_failed_entries(db_path=db_file)
     assert len(failed) == 1
@@ -145,3 +149,47 @@ def test_download_log_operations(tmp_path):
     # Test format_log_table
     table = db_manager.format_log_table(logs_after)
     assert isinstance(table, rich.table.Table)
+
+
+def test_cart_operations(tmp_path):
+    db_file = str(tmp_path / "test_data.db")
+    db_manager.init_db(db_path=db_file)
+
+    # Cart should be empty initially
+    cart_items = db_manager.get_cart_items(db_path=db_file)
+    assert len(cart_items) == 0
+
+    # Add item
+    added = db_manager.add_to_cart("https://example.com/movie/test", "Test Movie", "Movie", db_path=db_file)
+    assert added is True
+
+    # Duplicate add should fail
+    added_dup = db_manager.add_to_cart("https://example.com/movie/test", "Test Movie Duplicate", "Movie", db_path=db_file)
+    assert added_dup is False
+
+    # Get items
+    cart_items = db_manager.get_cart_items(db_path=db_file)
+    assert len(cart_items) == 1
+    assert cart_items[0]["url"] == "https://example.com/movie/test"
+    assert cart_items[0]["title"] == "Test Movie"
+    assert cart_items[0]["type"] == "Movie"
+
+    # Add another
+    added2 = db_manager.add_to_cart("https://example.com/series/test-series", "Test Series", "TV Series", db_path=db_file)
+    assert added2 is True
+    assert len(db_manager.get_cart_items(db_path=db_file)) == 2
+
+    # Remove item
+    db_manager.remove_from_cart("https://example.com/movie/test", db_path=db_file)
+    cart_items = db_manager.get_cart_items(db_path=db_file)
+    assert len(cart_items) == 1
+    assert cart_items[0]["url"] == "https://example.com/series/test-series"
+
+    # Clear cart
+    db_manager.clear_cart(db_path=db_file)
+    assert len(db_manager.get_cart_items(db_path=db_file)) == 0
+
+    # Format table
+    table = db_manager.format_cart_table([{"title": "X", "url": "Y", "type": "Z", "timestamp": "2026-08-19T23:18:08.123"}])
+    assert isinstance(table, rich.table.Table)
+

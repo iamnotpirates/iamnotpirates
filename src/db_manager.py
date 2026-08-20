@@ -75,6 +75,21 @@ def init_db(db_path: Optional[str] = None) -> None:
         )
     """)
 
+    cursor.execute("""
+        CREATE TABLE IF NOT EXISTS cart (
+            url TEXT PRIMARY KEY,
+            title TEXT,
+            type TEXT,
+            timestamp TEXT
+        )
+    """)
+
+    # Check if page_url column exists in downloads, if not ADD it
+    try:
+        cursor.execute("SELECT page_url FROM downloads LIMIT 1")
+    except sqlite3.OperationalError:
+        cursor.execute("ALTER TABLE downloads ADD COLUMN page_url TEXT")
+
     conn.commit()
 
     # Seed default configs if missing
@@ -234,14 +249,15 @@ def add_entry(entry: Optional[dict] = None, db_path: Optional[str] = None, **kwa
     output_path = data.get("output_path", "")
     error = data.get("error")
     timestamp = data.get("timestamp") or datetime.now().isoformat()
+    page_url = data.get("page_url", "")
 
     conn = get_connection(db_path)
     cursor = conn.cursor()
 
     cursor.execute("""
-        INSERT INTO downloads (id, media_type, title, season, episode, status, m3u8_url, output_path, error, timestamp)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    """, (entry_id, media_type, title, season, episode, status, m3u8_url, output_path, error, timestamp))
+        INSERT INTO downloads (id, media_type, title, season, episode, status, m3u8_url, output_path, error, timestamp, page_url)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    """, (entry_id, media_type, title, season, episode, status, m3u8_url, output_path, error, timestamp, page_url))
 
     conn.commit()
     conn.close()
@@ -298,6 +314,24 @@ def get_failed_entries(db_path: Optional[str] = None) -> list[dict]:
     return [e for e in entries if e.get("status") == "failed"]
 
 
+def delete_log_entry(entry_id: str, db_path: Optional[str] = None) -> None:
+    """Delete a specific log entry by ID."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM downloads WHERE id = ?", (entry_id,))
+    conn.commit()
+    conn.close()
+
+
+def clear_all_logs(db_path: Optional[str] = None) -> None:
+    """Delete all log entries."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM downloads")
+    conn.commit()
+    conn.close()
+
+
 def format_log_table(entries: list[dict]) -> Table:
     """Return a Rich Table of entries matching legacy download_log output format."""
     STATUS_COLORS = {
@@ -334,3 +368,75 @@ def format_log_table(entries: list[dict]) -> Table:
         )
 
     return table
+
+
+def add_to_cart(url: str, title: str, media_type: str, db_path: Optional[str] = None) -> bool:
+    """Add an item to the cart. Returns True if successfully added, False if it already exists."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            "INSERT INTO cart (url, title, type, timestamp) VALUES (?, ?, ?, ?)",
+            (url, title, media_type, datetime.now().isoformat())
+        )
+        conn.commit()
+        return True
+    except sqlite3.IntegrityError:
+        return False
+    finally:
+        conn.close()
+
+
+def get_cart_items(db_path: Optional[str] = None) -> list[dict]:
+    """Get all items in the cart."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("SELECT url, title, type, timestamp FROM cart ORDER BY timestamp ASC")
+    rows = cursor.fetchall()
+    conn.close()
+    return [dict(row) for row in rows]
+
+
+def remove_from_cart(url: str, db_path: Optional[str] = None) -> None:
+    """Remove an item from the cart by its URL."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM cart WHERE url = ?", (url,))
+    conn.commit()
+    conn.close()
+
+
+def clear_cart(db_path: Optional[str] = None) -> None:
+    """Clear all items from the cart."""
+    conn = get_connection(db_path)
+    cursor = conn.cursor()
+    cursor.execute("DELETE FROM cart")
+    conn.commit()
+    conn.close()
+
+
+def format_cart_table(items: list[dict]) -> Table:
+    """Return a Rich Table of cart items."""
+    table = Table(show_header=True, header_style="bold cyan")
+    table.add_column("No", style="dim", width=4, justify="right")
+    table.add_column("Type", width=12)
+    table.add_column("Title")
+    table.add_column("URL")
+    table.add_column("Date Added", width=20)
+
+    for i, item in enumerate(items, start=1):
+        ts = item.get("timestamp", "")
+        if ts:
+            try:
+                ts = ts.split(".")[0].replace("T", " ")
+            except Exception:
+                pass
+        table.add_row(
+            str(i),
+            item.get("type", ""),
+            item.get("title", ""),
+            item.get("url", ""),
+            ts,
+        )
+    return table
+

@@ -40,6 +40,16 @@ def get_failed_entries(db_path: Optional[str] = None) -> list[dict]:
     return db_manager.get_failed_entries(db_path=db_path)
 
 
+def delete_log_entry(entry_id: str, db_path: Optional[str] = None) -> None:
+    """Delete a specific log entry by ID."""
+    db_manager.delete_log_entry(entry_id, db_path=db_path)
+
+
+def clear_all_logs(db_path: Optional[str] = None) -> None:
+    """Delete all log entries."""
+    db_manager.clear_all_logs(db_path=db_path)
+
+
 def is_already_downloaded(output_path: str, min_size_bytes: int = 1_000_000) -> bool:
     """
     Return True if:
