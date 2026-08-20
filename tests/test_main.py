@@ -799,5 +799,55 @@ def test_process_download_item_movie_instant_skip(mock_add_entry, mock_is_dl, mo
     mock_add_entry.assert_called_once()
 
 
+@patch("src.main.extract_episode_sources")
+@patch("src.main.verify_media_file")
+@patch("src.main.is_already_downloaded")
+@patch("src.main.add_entry")
+@patch("src.main.fetch_series_details")
+def test_process_download_item_series_instant_skip(mock_details, mock_add_entry, mock_is_dl, mock_verify, mock_extract):
+    mock_is_dl.return_value = True
+    mock_verify.return_value = {"video_status": "HEALTHY", "missing_subtitles": []}
+    mock_details.return_value = {
+        "seasons": [{"season_num": 1, "episodes": [{"episode_num": 1, "media_id": "1", "title": "Ep 1"}]}]
+    }
+
+    selected_item = {
+        "title": "Instant Show",
+        "type": "TV Series",
+        "url": "https://z2.idlixku.com/series/instant-show"
+    }
+    summary = {
+        "total_items": 0,
+        "video_success": 0,
+        "video_failed": 0,
+        "video_skipped": 0,
+        "sub_success": 0,
+        "sub_failed": 0,
+        "items": []
+    }
+    config = {"series_dir": "C:\\Downloads"}
+
+    from src.main import process_download_item
+    # Mocking choices inside questionary checkbox
+    with patch("src.main.questionary.checkbox") as mock_chk, \
+         patch("src.main.questionary.select") as mock_sel:
+        mock_chk_obj = MagicMock()
+        mock_chk_obj.ask.return_value = ["Episode 1: Ep 1"]
+        mock_chk.return_value = mock_chk_obj
+
+        mock_sel_obj = MagicMock()
+        mock_sel_obj.ask.return_value = "Season 1"
+        mock_sel.return_value = mock_sel_obj
+
+        process_download_item(selected_item, "https://z2.idlixku.com/", config, summary, preset_sub_choice="Tanpa Subtitle", preset_download_dir="C:\\Downloads")
+
+    mock_is_dl.assert_called_once()
+    mock_verify.assert_called_once()
+    mock_extract.assert_not_called()  # Scraper episode di-bypass!
+    assert summary["video_skipped"] == 1
+    mock_add_entry.assert_called_once()
+
+
+
 
 

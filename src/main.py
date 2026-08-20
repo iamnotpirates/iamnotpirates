@@ -148,6 +148,32 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
             summary["total_items"] += 1
 
             try:
+                # Instant local check
+                if is_already_downloaded(expected_path):
+                    verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
+                    if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
+                        console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
+                        add_entry(
+                            title=ep_title,
+                            media_type="episode",
+                            season=season_num,
+                            episode=ep["episode_num"],
+                            status="skipped",
+                            m3u8_url="",
+                            output_path=expected_path,
+                            page_url=item_url
+                        )
+                        summary["video_skipped"] += 1
+                        summary["items"].append({
+                            "title": ep_title,
+                            "video_status": "SKIPPED",
+                            "video_error": None,
+                            "subtitles": []
+                        })
+                        continue
+                    else:
+                        console.print(f"[bold yellow]⚠️ Episode {ep['episode_num']} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
+
                 sources = extract_episode_sources(ep["media_id"], item_url)
                 m3u8_urls = sources.get("m3u8_urls", [])
                 subtitles = sources.get("subtitles", [])
@@ -175,31 +201,6 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                     continue
 
                 m3u8_url = m3u8_urls[0]
-
-                if is_already_downloaded(expected_path):
-                    verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
-                    if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
-                        console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat, di-skip.[/yellow]")
-                        add_entry(
-                            title=ep_title,
-                            media_type="episode",
-                            season=season_num,
-                            episode=ep["episode_num"],
-                            status="skipped",
-                            m3u8_url=m3u8_url,
-                            output_path=expected_path,
-                            page_url=item_url
-                        )
-                        summary["video_skipped"] += 1
-                        summary["items"].append({
-                            "title": ep_title,
-                            "video_status": "SKIPPED",
-                            "video_error": None,
-                            "subtitles": []
-                        })
-                        continue
-                    else:
-                        console.print(f"[bold yellow]⚠️ Episode {ep['episode_num']} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
 
                 console.print(f"[bold green]Memulai download Episode {ep['episode_num']} ke {season_dir}...[/bold green]")
                 video_path = download_media_stream(m3u8_url, season_dir, base_filename, "N/A", "Best Available", create_subfolder=False)
