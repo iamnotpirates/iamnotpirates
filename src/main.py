@@ -4,7 +4,7 @@ import re
 import questionary
 from rich.console import Console
 
-from src.db_manager import init_db
+from src.db_manager import init_db, add_to_cart, get_cart_items, remove_from_cart, clear_cart, format_cart_table
 from src.ffmpeg_manager import ensure_ffmpeg, verify_media_file, get_ffmpeg_paths
 from src.config_manager import (
     load_config, save_config, add_target_url, set_active_url, delete_target_url,
@@ -25,7 +25,7 @@ from src.downloader import (
     _get_lang_code
 )
 from src.series_extractor import fetch_series_details, extract_episode_sources
-from src.download_log import add_entry, get_failed_entries, update_entry, format_log_table, is_already_downloaded
+from src.download_log import add_entry, get_failed_entries, update_entry, format_log_table, is_already_downloaded, delete_log_entry, clear_all_logs
 from src.n_m3u8dl_manager import download_with_re, ensure_binary, get_binary_path
 from src.playwright_manager import ensure_playwright, is_chromium_installed
 
@@ -42,35 +42,7 @@ if hasattr(sys.stderr, "reconfigure"):
 
 console = Console()
 
-def handle_item_download(items: list[dict], active_url: str, config: dict) -> None:
-    if not items:
-        console.print("[yellow]Tidak ada item untuk di-download.[/yellow]")
-        return
-
-    summary = {
-        "total_items": 0,
-        "video_success": 0,
-        "video_failed": 0,
-        "video_skipped": 0,
-        "sub_success": 0,
-        "sub_failed": 0,
-        "items": []
-    }
-
-    while True:
-        choice_num = questionary.text(
-            f"Masukkan nomor item yang ingin di-download (1-{len(items)}):",
-            validate=lambda val: val.isdigit() and 1 <= int(val) <= len(items)
-        ).ask()
-
-        if choice_num is None:
-            return
-        if not choice_num:
-            console.print("[yellow]Masukkan nomor yang valid.[/yellow]")
-            continue
-        break
-
-    selected_item = items[int(choice_num) - 1]
+def process_download_item(selected_item: dict, active_url: str, config: dict, summary: dict, preset_sub_choice: str = None, preset_download_dir: str = None) -> None:
     raw_title = selected_item.get("title", "Unknown")
     item_url = selected_item.get("url", "")
 
@@ -137,29 +109,35 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
         selected_episodes = [ep_map[label] for label in selected_ep_labels if label in ep_map]
 
         # --- Step 3: Lokasi simpan ---
-        default_dir = get_download_dir(config, media_type="series")
-        while True:
-            custom_dir = questionary.text(
-                f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
-                default=default_dir
-            ).ask()
-            if custom_dir is None:
-                return
-            target_dir = custom_dir.strip() if custom_dir else default_dir
-            set_download_dir(config, target_dir, media_type="series")
-            break
+        if preset_download_dir:
+            target_dir = preset_download_dir
+        else:
+            default_dir = get_download_dir(config, media_type="series")
+            while True:
+                custom_dir = questionary.text(
+                    f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
+                    default=default_dir
+                ).ask()
+                if custom_dir is None:
+                    return
+                target_dir = custom_dir.strip() if custom_dir else default_dir
+                set_download_dir(config, target_dir, media_type="series")
+                break
 
         # --- Step 4: Pilih Subtitle ---
-        sub_choices = ["Semua Subtitle Tersedia", "Indonesia saja", "English saja", "Tanpa Subtitle", "⬅ Kembali"]
-        while True:
-            selected_sub_choice = questionary.select(
-                "Pilih Subtitle:",
-                choices=sub_choices
-            ).ask()
+        if preset_sub_choice:
+            selected_sub_choice = preset_sub_choice
+        else:
+            sub_choices = ["Semua Subtitle Tersedia", "Indonesia saja", "English saja", "Tanpa Subtitle", "⬅ Kembali"]
+            while True:
+                selected_sub_choice = questionary.select(
+                    "Pilih Subtitle:",
+                    choices=sub_choices
+                ).ask()
 
-            if selected_sub_choice is None or selected_sub_choice == "⬅ Kembali":
-                return
-            break
+                if selected_sub_choice is None or selected_sub_choice == "⬅ Kembali":
+                    return
+                break
 
         for ep in selected_episodes:
             console.print(f"\n[bold cyan]Memproses Episode {ep['episode_num']}: {ep['title']}...[/bold cyan]")
@@ -184,7 +162,8 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                         status="failed",
                         m3u8_url="",
                         output_path=expected_path,
-                        error="No m3u8 url found"
+                        error="No m3u8 url found",
+                        page_url=item_url
                     )
                     summary["video_failed"] += 1
                     summary["items"].append({
@@ -208,7 +187,8 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                             episode=ep["episode_num"],
                             status="skipped",
                             m3u8_url=m3u8_url,
-                            output_path=expected_path
+                            output_path=expected_path,
+                            page_url=item_url
                         )
                         summary["video_skipped"] += 1
                         summary["items"].append({
@@ -233,7 +213,8 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                         episode=ep["episode_num"],
                         status="success",
                         m3u8_url=m3u8_url,
-                        output_path=video_path
+                        output_path=video_path,
+                        page_url=item_url
                     )
                     summary["video_success"] += 1
                     sub_results = []
@@ -280,7 +261,8 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                         status="failed",
                         m3u8_url=m3u8_url,
                         output_path=expected_path,
-                        error="Download failed"
+                        error="Download failed",
+                        page_url=item_url
                     )
                     summary["video_failed"] += 1
                     summary["items"].append({
@@ -299,7 +281,8 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                     status="failed",
                     m3u8_url="",
                     output_path=expected_path,
-                    error=str(e)
+                    error=str(e),
+                    page_url=item_url
                 )
                 summary["video_failed"] += 1
                 summary["items"].append({
@@ -308,27 +291,70 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
                     "video_error": str(e),
                     "subtitles": []
                 })
-        print_download_summary(summary)
         return
 
     console.print(f"\n[bold cyan]Memproses: {clean_title} ({year})...[/bold cyan]")
     summary["total_items"] += 1
 
+    # --- Pilih Subtitle ---
+    if preset_sub_choice:
+        selected_sub_choice = preset_sub_choice
+    else:
+        sub_choices = ["Indonesia saja", "English saja", "Semua Subtitle Tersedia", "Tanpa Subtitle", "⬅ Kembali"]
+        while True:
+            selected_sub_choice = questionary.select(
+                "Pilih Subtitle:",
+                choices=sub_choices
+            ).ask()
+
+            if selected_sub_choice is None or selected_sub_choice == "⬅ Kembali":
+                return
+            break
+
     # --- Download Path ---
-    default_dir = get_download_dir(config, media_type="movie")
-    while True:
-        custom_dir = questionary.text(
-            f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
-            default=default_dir
-        ).ask()
-        if custom_dir is None:
-            return
-        target_dir = custom_dir.strip() if custom_dir else default_dir
-        set_download_dir(config, target_dir, media_type="movie")
-        break
+    if preset_download_dir:
+        target_dir = preset_download_dir
+    else:
+        default_dir = get_download_dir(config, media_type="movie")
+        while True:
+            custom_dir = questionary.text(
+                f"Lokasi simpan (Tekan ENTER untuk default: {default_dir}):",
+                default=default_dir
+            ).ask()
+            if custom_dir is None:
+                return
+            target_dir = custom_dir.strip() if custom_dir else default_dir
+            set_download_dir(config, target_dir, media_type="movie")
+            break
 
     folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
     expected_path = os.path.join(target_dir, folder_name, f"{folder_name}.mp4")
+
+    # Instant local check
+    if is_already_downloaded(expected_path):
+        verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
+        if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
+            console.print(f"[yellow]⏭ {clean_title} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
+            add_entry(
+                title=clean_title,
+                media_type="movie",
+                season=None,
+                episode=None,
+                status="skipped",
+                m3u8_url="",
+                output_path=expected_path,
+                page_url=selected_item["url"]
+            )
+            summary["video_skipped"] += 1
+            summary["items"].append({
+                "title": clean_title,
+                "video_status": "SKIPPED",
+                "video_error": None,
+                "subtitles": []
+            })
+            return
+        else:
+            console.print(f"[bold yellow]⚠️ {clean_title} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
 
     # --- Extract Video Sources ---
     console.print("[bold yellow]Mengambil sumber video & subtitle...[/bold yellow]")
@@ -346,7 +372,8 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             status="failed",
             m3u8_url="",
             output_path=expected_path,
-            error="No m3u8 url found"
+            error="No m3u8 url found",
+            page_url=selected_item["url"]
         )
         summary["video_failed"] += 1
         summary["items"].append({
@@ -355,47 +382,9 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             "video_error": "No m3u8 url found",
             "subtitles": []
         })
-        print_download_summary(summary)
         return
 
     m3u8_url = m3u8_urls[0]
-
-    # --- Pilih Subtitle ---
-    sub_choices = ["Tanpa Subtitle"] + [f"{s['lang']} - {s['url']}" for s in subtitles] + ["⬅ Kembali"]
-    while True:
-        selected_sub_choice = questionary.select(
-            "Pilih Subtitle:",
-            choices=sub_choices
-        ).ask()
-
-        if selected_sub_choice is None or selected_sub_choice == "⬅ Kembali":
-            return
-        break
-
-    if is_already_downloaded(expected_path):
-        verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
-        if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
-            console.print(f"[yellow]⏭ {clean_title} sudah ada dan sehat, di-skip.[/yellow]")
-            add_entry(
-                title=clean_title,
-                media_type="movie",
-                season=None,
-                episode=None,
-                status="skipped",
-                m3u8_url=m3u8_url,
-                output_path=expected_path
-            )
-            summary["video_skipped"] += 1
-            summary["items"].append({
-                "title": clean_title,
-                "video_status": "SKIPPED",
-                "video_error": None,
-                "subtitles": []
-            })
-            print_download_summary(summary)
-            return
-        else:
-            console.print(f"[bold yellow]⚠️ {clean_title} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
 
     # --- Trigger Download ---
     console.print(f"[bold green]Memulai download {clean_title} ke {target_dir}...[/bold green]")
@@ -411,28 +400,58 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             episode=None,
             status="success",
             m3u8_url=m3u8_url,
-            output_path=video_path
+            output_path=video_path,
+            page_url=selected_item["url"]
         )
         summary["video_success"] += 1
 
         # Download Subtitle if selected
         if selected_sub_choice and selected_sub_choice != "Tanpa Subtitle":
-            matched_sub = next((s for s in subtitles if f"{s['lang']} - {s['url']}" == selected_sub_choice), None)
-            if matched_sub:
-                sub_lang = _get_lang_code(matched_sub.get("lang", ""))
-                base_name = os.path.splitext(video_path)[0]
-                target_srt_path = f"{base_name}.{sub_lang}.srt"
+            if " - http" in selected_sub_choice:
+                # Specific subtitle mode
+                matched_sub = next((s for s in subtitles if f"{s['lang']} - {s['url']}" == selected_sub_choice), None)
+                if matched_sub:
+                    sub_lang = _get_lang_code(matched_sub.get("lang", ""))
+                    base_name = os.path.splitext(video_path)[0]
+                    target_srt_path = f"{base_name}.{sub_lang}.srt"
 
-                console.print(f"[bold yellow]Mengunduh dan mengonversi subtitle (.vtt -> .srt)...[/bold yellow]")
-                sub_success = download_subtitle(matched_sub["url"], target_srt_path)
-                if sub_success:
-                    print_success(f"Berhasil menyimpan Subtitle SRT: {target_srt_path}")
-                    summary["sub_success"] += 1
-                    sub_results.append({"lang": sub_lang, "status": "SUCCESS", "error": None})
-                else:
-                    print_error("Gagal mengunduh subtitle SRT.")
-                    summary["sub_failed"] += 1
-                    sub_results.append({"lang": sub_lang, "status": "FAILED", "error": "Download failed"})
+                    console.print(f"[bold yellow]Mengunduh dan mengonversi subtitle (.vtt -> .srt)...[/bold yellow]")
+                    sub_success = download_subtitle(matched_sub["url"], target_srt_path)
+                    if sub_success:
+                        print_success(f"Berhasil menyimpan Subtitle SRT: {target_srt_path}")
+                        summary["sub_success"] += 1
+                        sub_results.append({"lang": sub_lang, "status": "SUCCESS", "error": None})
+                    else:
+                        print_error("Gagal mengunduh subtitle SRT.")
+                        summary["sub_failed"] += 1
+                        sub_results.append({"lang": sub_lang, "status": "FAILED", "error": "Download failed"})
+            else:
+                # General preference mode
+                sub_paths = download_subtitles_batch(subtitles, video_path, selected_sub_choice)
+                for sp in sub_paths:
+                    print_success(f"Berhasil menyimpan Subtitle: {sp}")
+
+                mode_clean = selected_sub_choice.strip().lower()
+                target_subs = []
+                for s in subtitles:
+                    lang = s.get("lang", "")
+                    l_code = _get_lang_code(lang)
+                    if "indonesia" in mode_clean or mode_clean == "id":
+                        if l_code == "id":
+                            target_subs.append((s, l_code))
+                    elif "english" in mode_clean or mode_clean == "en":
+                        if l_code == "en":
+                            target_subs.append((s, l_code))
+                    else:
+                        target_subs.append((s, l_code))
+
+                for idx_sub, (s, l_code) in enumerate(target_subs):
+                    if idx_sub < len(sub_paths):
+                        summary["sub_success"] += 1
+                        sub_results.append({"lang": l_code, "status": "SUCCESS", "error": None})
+                    else:
+                        summary["sub_failed"] += 1
+                        sub_results.append({"lang": l_code, "status": "FAILED", "error": "Download failed"})
 
         summary["items"].append({
             "title": clean_title,
@@ -450,7 +469,8 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             status="failed",
             m3u8_url=m3u8_url,
             output_path=expected_path,
-            error="Download failed"
+            error="Download failed",
+            page_url=selected_item["url"]
         )
         summary["video_failed"] += 1
         summary["items"].append({
@@ -460,41 +480,319 @@ def handle_item_download(items: list[dict], active_url: str, config: dict) -> No
             "subtitles": []
         })
 
-    print_download_summary(summary)
 
-def handle_retry_failed(active_url: str, config: dict) -> None:
-    failed = get_failed_entries()
-    if not failed:
-        console.print("[green]Tidak ada download yang gagal.[/green]")
+def handle_item_download(items: list[dict], active_url: str, config: dict) -> None:
+    if not items:
+        console.print("[yellow]Tidak ada item untuk di-download.[/yellow]")
         return
 
-    table = format_log_table(failed)
-    console.print(table)
+    summary = {
+        "total_items": 0,
+        "video_success": 0,
+        "video_failed": 0,
+        "video_skipped": 0,
+        "sub_success": 0,
+        "sub_failed": 0,
+        "items": []
+    }
 
-    action = questionary.select(
-        "Pilih Aksi:",
-        choices=["🔄 Retry Semua yang Gagal", "↩️ Kembali"]
+    while True:
+        choice_num = questionary.text(
+            f"Masukkan nomor item yang ingin di-download (1-{len(items)}):",
+            validate=lambda val: val.isdigit() and 1 <= int(val) <= len(items)
+        ).ask()
+
+        if choice_num is None:
+            return
+        if not choice_num:
+            console.print("[yellow]Masukkan nomor yang valid.[/yellow]")
+            continue
+        break
+
+    selected_item = items[int(choice_num) - 1]
+    process_download_item(selected_item, active_url, config, summary)
+    print_download_summary(summary)
+    questionary.press_any_key_to_continue(message="Tekan sebarang tombol untuk kembali...").ask()
+
+
+def handle_add_to_cart(items: list[dict]) -> None:
+    if not items:
+        console.print("[yellow]Tidak ada item untuk dimasukkan ke keranjang.[/yellow]")
+        return
+
+    choices = []
+    for idx, item in enumerate(items):
+        title = item.get("title", "Unknown")
+        year = item.get("year")
+        media_type = item.get("type", "Movie")
+        year_str = f" ({year})" if year and year != "N/A" else ""
+        choices.append(f"{idx+1}. [{media_type}] {title}{year_str}")
+
+    selected_labels = questionary.checkbox(
+        "Pilih item yang ingin ditambahkan ke Keranjang (SPACE untuk pilih, ENTER untuk lanjut):",
+        choices=choices
     ).ask()
 
-    if action != "🔄 Retry Semua yang Gagal":
+    if not selected_labels:
+        console.print("[yellow]Tidak ada item yang dipilih.[/yellow]")
         return
 
-    for entry in failed:
-        console.print(f"\n[bold cyan]Retry: {entry['title']}...[/bold cyan]")
-        try:
-            m3u8_url = entry["m3u8_url"]
-            output_path = entry["output_path"]
-            output_dir = os.path.dirname(output_path)
-            base_name = os.path.splitext(os.path.basename(output_path))[0]
+    success_count = 0
+    duplicate_count = 0
 
-            success = download_with_re(m3u8_url, output_dir, base_name)
-            if success:
-                update_entry(entry["id"], {"status": "success", "error": None})
-                print_success(f"Berhasil: {output_path}")
-            else:
-                print_error(f"Masih gagal: {entry['title']}")
-        except Exception as e:
-            print_error(f"Error retry {entry['title']}: {e}")
+    for label in selected_labels:
+        idx = int(label.split(".")[0]) - 1
+        item = items[idx]
+        url = item.get("url", "")
+        title = item.get("title", "Unknown")
+        media_type = item.get("type", "Movie")
+
+        if add_to_cart(url, title, media_type):
+            success_count += 1
+            console.print(f"[green]✓ Berhasil menambahkan: {title}[/green]")
+        else:
+            duplicate_count += 1
+            console.print(f"[yellow]⚠ Sudah ada di keranjang: {title}[/yellow]")
+
+    console.print(f"\nHasil: {success_count} item berhasil ditambahkan, {duplicate_count} duplikat di-skip.\n")
+    questionary.press_any_key_to_continue(message="Tekan sebarang tombol untuk kembali...").ask()
+
+
+def handle_cart(active_url: str, config: dict) -> None:
+    while True:
+        cart_items = get_cart_items()
+        if not cart_items:
+            console.print("\n[bold yellow]🛒 Keranjang Download Anda kosong.[/bold yellow]\n")
+            questionary.press_any_key_to_continue(message="Tekan sebarang tombol untuk kembali ke menu...").ask()
+            return
+
+        console.print("\n[bold cyan]🛒 Daftar Item di Keranjang Download:[/bold cyan]")
+        table = format_cart_table(cart_items)
+        console.print(table)
+
+        action = questionary.select(
+            "Pilih Aksi:",
+            choices=[
+                "📥 Download Semua di Keranjang",
+                "❌ Hapus Item dari Keranjang",
+                "🗑️ Kosongkan Keranjang",
+                "↩️ Kembali ke Menu Utama"
+            ]
+        ).ask()
+
+        if action is None or action == "↩️ Kembali ke Menu Utama":
+            return
+        elif action == "📥 Download Semua di Keranjang":
+            # 1. Ask Subtitle preference once for the entire batch
+            sub_choices = ["Indonesia saja", "English saja", "Semua Subtitle Tersedia", "Tanpa Subtitle", "⬅ Kembali"]
+            preset_sub_choice = questionary.select(
+                "Pilih Subtitle untuk Semua Item di Keranjang:",
+                choices=sub_choices
+            ).ask()
+            if preset_sub_choice is None or preset_sub_choice == "⬅ Kembali":
+                continue
+
+            # 2. Ask Download path once for the entire batch
+            default_movie_dir = get_download_dir(config, media_type="movie")
+            default_series_dir = get_download_dir(config, media_type="series")
+            console.print(f"\n[bold cyan]Folder default saat ini:[/bold cyan]")
+            console.print(f"  - Movies: {default_movie_dir}")
+            console.print(f"  - TV Series: {default_series_dir}")
+            preset_dir_input = questionary.text(
+                "Lokasi simpan untuk semua item di keranjang (Tekan ENTER untuk menggunakan folder default):"
+            ).ask()
+
+            if preset_dir_input is None:
+                continue
+
+            preset_dir = preset_dir_input.strip() if preset_dir_input.strip() else None
+
+            summary = {
+                "total_items": 0,
+                "video_success": 0,
+                "video_failed": 0,
+                "video_skipped": 0,
+                "sub_success": 0,
+                "sub_failed": 0,
+                "items": []
+            }
+            # Download item one by one and remove on success
+            for idx, item in enumerate(cart_items):
+                console.print(f"\n[bold cyan]=== Mengunduh Item Keranjang {idx+1}/{len(cart_items)}: {item['title']} ===[/bold cyan]")
+
+                # Check media type to resolve the target default dir if no preset_dir was entered
+                item_preset_dir = preset_dir
+                if not item_preset_dir:
+                    is_series = item.get("type") == "TV Series" or "/series/" in item.get("url", "")
+                    if is_series:
+                        item_preset_dir = default_series_dir
+                    else:
+                        item_preset_dir = default_movie_dir
+
+                process_download_item(item, active_url, config, summary, preset_sub_choice=preset_sub_choice, preset_download_dir=item_preset_dir)
+
+                # Check if this item had any failures in this step
+                failures = [i for i in summary["items"] if i["video_status"] == "FAILED" and item["title"] in i["title"]]
+                if not failures:
+                    remove_from_cart(item["url"])
+                    console.print(f"[green]✓ {item['title']} dihapus dari keranjang karena berhasil/skipped.[/green]")
+                else:
+                    console.print(f"[yellow]⚠ {item['title']} tetap di keranjang karena ada download yang gagal.[/yellow]")
+
+            print_download_summary(summary)
+            questionary.press_any_key_to_continue(message="Tekan sebarang tombol untuk kembali...").ask()
+
+        elif action == "❌ Hapus Item dari Keranjang":
+            choices = [f"{idx+1}. {item['title']}" for idx, item in enumerate(cart_items)] + ["⬅ Kembali"]
+            to_remove = questionary.select(
+                "Pilih item yang ingin dihapus:",
+                choices=choices
+            ).ask()
+            if to_remove and to_remove != "⬅ Kembali":
+                idx = int(to_remove.split(".")[0]) - 1
+                item = cart_items[idx]
+                remove_from_cart(item["url"])
+                print_success(f"Berhasil menghapus {item['title']} dari keranjang.")
+
+        elif action == "🗑️ Kosongkan Keranjang":
+            confirm = questionary.confirm("Apakah Anda yakin ingin mengosongkan seluruh keranjang?").ask()
+            if confirm:
+                clear_cart()
+                print_success("Keranjang berhasil dikosongkan.")
+
+
+def handle_retry_failed(active_url: str, config: dict) -> None:
+    while True:
+        failed = get_failed_entries()
+        if not failed:
+            console.print("[yellow]Tidak ada download yang gagal untuk di-retry.[/yellow]")
+            questionary.press_any_key_to_continue(message="Tekan sebarang tombol untuk kembali ke menu...").ask()
+            return
+
+        table = format_log_table(failed)
+        console.print(table)
+
+        action = questionary.select(
+            "Pilih Aksi:",
+            choices=[
+                "🔄 Retry Semua yang Gagal",
+                "❌ Hapus Log Tertentu",
+                "🗑️ Kosongkan Seluruh Log",
+                "↩️ Kembali"
+            ]
+        ).ask()
+
+        if action is None or action == "↩️ Kembali":
+            return
+        elif action == "❌ Hapus Log Tertentu":
+            choices = [f"{idx+1}. {item['title']}" for idx, item in enumerate(failed)] + ["⬅ Kembali"]
+            to_remove = questionary.select(
+                "Pilih log yang ingin dihapus:",
+                choices=choices
+            ).ask()
+            if to_remove and to_remove != "⬅ Kembali":
+                idx = int(to_remove.split(".")[0]) - 1
+                item = failed[idx]
+                delete_log_entry(item["id"])
+                print_success(f"Berhasil menghapus log {item['title']}.")
+        elif action == "🗑️ Kosongkan Seluruh Log":
+            confirm = questionary.confirm("Apakah Anda yakin ingin mengosongkan seluruh log gagal?").ask()
+            if confirm:
+                clear_all_logs()
+                print_success("Seluruh log gagal berhasil dikosongkan.")
+        elif action == "🔄 Retry Semua yang Gagal":
+            summary = {
+                "total_items": len(failed),
+                "video_success": 0,
+                "video_failed": 0,
+                "video_skipped": 0,
+                "sub_success": 0,
+                "sub_failed": 0,
+                "items": []
+            }
+
+            for entry in failed:
+                console.print(f"\n[bold cyan]Retry: {entry['title']}...[/bold cyan]")
+                try:
+                    m3u8_url = entry["m3u8_url"]
+                    output_path = entry["output_path"]
+                    output_dir = os.path.dirname(output_path)
+                    base_name = os.path.splitext(os.path.basename(output_path))[0]
+
+                    # Re-scrape if page_url exists
+                    page_url = entry.get("page_url")
+                    if page_url:
+                        console.print(f"[bold yellow]Mengambil token m3u8 segar dari {page_url}...[/bold yellow]")
+                        try:
+                            if entry.get("media_type") == "movie":
+                                sources = extract_video_sources(page_url)
+                                fresh_urls = sources.get("m3u8_urls", [])
+                                if fresh_urls:
+                                    m3u8_url = fresh_urls[0]
+                                    console.print("[green]Token m3u8 berhasil diperbarui.[/green]")
+                                    update_entry(entry["id"], {"m3u8_url": m3u8_url})
+                                else:
+                                    console.print("[yellow]Gagal mengambil token segar, mencoba URL lama...[/yellow]")
+                            elif entry.get("media_type") == "episode":
+                                series_info = fetch_series_details(page_url)
+                                seasons = series_info.get("seasons", [])
+                                matched_ep = None
+                                for s in seasons:
+                                    if s.get("season_num") == entry.get("season"):
+                                        for ep in s.get("episodes", []):
+                                            if ep.get("episode_num") == entry.get("episode"):
+                                                matched_ep = ep
+                                                break
+                                        if matched_ep:
+                                            break
+                                if matched_ep:
+                                    sources = extract_episode_sources(matched_ep["media_id"], page_url)
+                                    fresh_urls = sources.get("m3u8_urls", [])
+                                    if fresh_urls:
+                                        m3u8_url = fresh_urls[0]
+                                        console.print("[green]Token m3u8 berhasil diperbarui.[/green]")
+                                        update_entry(entry["id"], {"m3u8_url": m3u8_url})
+                                    else:
+                                        console.print("[yellow]Gagal mengambil token segar, mencoba URL lama...[/yellow]")
+                                else:
+                                    console.print("[yellow]Episode tidak ditemukan di detail halaman, mencoba URL lama...[/yellow]")
+                        except Exception as e:
+                            console.print(f"[yellow]Gagal mengambil token segar ({e}), mencoba URL lama...[/yellow]")
+
+                    success = download_with_re(m3u8_url, output_dir, base_name)
+                    if success:
+                        update_entry(entry["id"], {"status": "success", "error": None})
+                        print_success(f"Berhasil: {output_path}")
+                        summary["video_success"] += 1
+                        summary["items"].append({
+                            "title": entry["title"],
+                            "video_status": "SUCCESS",
+                            "video_error": None,
+                            "subtitles": []
+                        })
+                    else:
+                        print_error(f"Masih gagal: {entry['title']}")
+                        summary["video_failed"] += 1
+                        summary["items"].append({
+                            "title": entry["title"],
+                            "video_status": "FAILED",
+                            "video_error": "Download failed",
+                            "subtitles": []
+                        })
+                except Exception as e:
+                    print_error(f"Error retry {entry['title']}: {e}")
+                    summary["video_failed"] += 1
+                    summary["items"].append({
+                        "title": entry["title"],
+                        "video_status": "FAILED",
+                        "video_error": str(e),
+                        "subtitles": []
+                    })
+
+            print_download_summary(summary)
+            questionary.press_any_key_to_continue(message="Tekan sebarang tombol untuk kembali...").ask()
+            break
+
 
 def handle_featured(active_url: str) -> None:
     config = load_config()
@@ -510,13 +808,16 @@ def handle_featured(active_url: str) -> None:
             action = questionary.select(
                 "Pilih Aksi:",
                 choices=[
-                    "📥 Download Film/Series",
+                    "📥 Download Film/Series (Single-select)",
+                    "🛒 Tambahkan ke Keranjang Download (Multi-select)",
                     "↩️ Kembali ke Menu Utama"
                 ]
             ).ask()
 
-            if action == "📥 Download Film/Series":
+            if action == "📥 Download Film/Series (Single-select)":
                 handle_item_download(items, active_url, config)
+            elif action == "🛒 Tambahkan ke Keranjang Download (Multi-select)":
+                handle_add_to_cart(items)
     except Exception as e:
         print_error(str(e))
 
@@ -647,14 +948,18 @@ def handle_search(active_url: str, config: dict) -> None:
             action = questionary.select(
                 "Pilih Aksi:",
                 choices=[
-                    "📥 Download Film/Series",
+                    "📥 Download Film/Series (Single-select)",
+                    "🛒 Tambahkan ke Keranjang Download (Multi-select)",
                     "🔍 Cari Judul Lain",
                     "↩️ Kembali ke Menu Utama"
                 ]
             ).ask()
 
-            if action == "📥 Download Film/Series":
+            if action == "📥 Download Film/Series (Single-select)":
                 handle_item_download(items, active_url, config)
+                break
+            elif action == "🛒 Tambahkan ke Keranjang Download (Multi-select)":
+                handle_add_to_cart(items)
                 break
             elif action == "🔍 Cari Judul Lain":
                 continue
@@ -704,15 +1009,16 @@ def main() -> None:
                 "1. 🔍 Search Movie & TV Series / Cari Film & TV Series",
                 "2. 🔥 Browse Featured Content / Lihat Content Populer",
                 "3. 📋 Download Log & Retry / Log & Retry Download Gagal",
-                "4. 🛠️  Settings / Pengaturan (Folder & Mode)",
-                "5. 🌐 Switch Target URL / Pilih Active Target URL",
-                "6. ➕ Add New Target URL / Tambah Target URL Baru",
-                "7. ⚙️  Manage Target URLs / Kelola Daftar Target URL",
-                "8. ❌ Exit / Keluar",
+                "4. 🛒 Keranjang Download / Kelola Keranjang Download",
+                "5. 🛠️  Settings / Pengaturan (Folder & Mode)",
+                "6. 🌐 Switch Target URL / Pilih Active Target URL",
+                "7. ➕ Add New Target URL / Tambah Target URL Baru",
+                "8. ⚙️  Manage Target URLs / Kelola Daftar Target URL",
+                "9. ❌ Exit / Keluar",
             ]
         ).ask()
 
-        if choice is None or choice.startswith("8."):
+        if choice is None or choice.startswith("9."):
             console.print("[bold yellow]Terima kasih! Sampai jumpa.[/bold yellow]")
             sys.exit(0)
         elif choice.startswith("1."):
@@ -722,12 +1028,14 @@ def main() -> None:
         elif choice.startswith("3."):
             handle_retry_failed(active_url, config)
         elif choice.startswith("4."):
-            handle_settings()
+            handle_cart(active_url, config)
         elif choice.startswith("5."):
-            handle_select_active()
+            handle_settings()
         elif choice.startswith("6."):
-            handle_add_url()
+            handle_select_active()
         elif choice.startswith("7."):
+            handle_add_url()
+        elif choice.startswith("8."):
             handle_manage_urls()
 
 if __name__ == "__main__":

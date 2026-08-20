@@ -23,6 +23,14 @@ def cleanup():
         os.remove(TEST_CONFIG)
 
 
+@pytest.fixture(autouse=True)
+def mock_global_press_any_key():
+    with patch("src.main.questionary.press_any_key_to_continue") as mock_press:
+        mock_press_obj = MagicMock()
+        mock_press.return_value = mock_press_obj
+        yield mock_press
+
+
 def test_main_config_integration():
     config = load_config(TEST_CONFIG)
     assert "active_url" in config
@@ -248,7 +256,7 @@ def test_main_exit(mock_load, mock_header, mock_select, mock_ensure):
         ],
     }
     mock_select_obj = MagicMock()
-    mock_select_obj.ask.return_value = "8. ❌ Exit / Keluar"
+    mock_select_obj.ask.return_value = "9. ❌ Exit / Keluar"
     mock_select.return_value = mock_select_obj
 
     with pytest.raises(SystemExit) as excinfo:
@@ -440,19 +448,24 @@ def test_handle_item_download_tv_series_resilient_error(
     assert mock_download_media.call_count == 1
 
 
+@patch("src.main.questionary.press_any_key_to_continue")
 @patch("src.main.get_failed_entries")
-def test_handle_retry_failed_no_failures(mock_get_failed):
+def test_handle_retry_failed_no_failures(mock_get_failed, mock_press):
     mock_get_failed.return_value = []
+    mock_press_obj = MagicMock()
+    mock_press.return_value = mock_press_obj
     from src.main import handle_retry_failed
     handle_retry_failed("https://z2.idlixku.com/", {})
     mock_get_failed.assert_called_once()
+    mock_press.assert_called_once()
 
 
+@patch("src.main.questionary.press_any_key_to_continue")
 @patch("src.main.update_entry")
 @patch("src.main.download_with_re")
 @patch("src.main.questionary.select")
 @patch("src.main.get_failed_entries")
-def test_handle_retry_failed_retries_all(mock_get_failed, mock_select, mock_re, mock_update):
+def test_handle_retry_failed_retries_all(mock_get_failed, mock_select, mock_re, mock_update, mock_press):
     mock_get_failed.return_value = [
         {
             "id": 1,
@@ -465,12 +478,102 @@ def test_handle_retry_failed_retries_all(mock_get_failed, mock_select, mock_re, 
     mock_select_obj.ask.return_value = "🔄 Retry Semua yang Gagal"
     mock_select.return_value = mock_select_obj
     mock_re.return_value = True
+    mock_press_obj = MagicMock()
+    mock_press.return_value = mock_press_obj
 
     from src.main import handle_retry_failed
     handle_retry_failed("https://z2.idlixku.com/", {})
 
     mock_re.assert_called_once_with("https://stream.com/f.m3u8", "C:\\Downloads", "Failed Movie")
     mock_update.assert_called_once_with(1, {"status": "success", "error": None})
+    mock_press.assert_called_once()
+
+
+@patch("src.main.extract_video_sources")
+@patch("src.main.questionary.press_any_key_to_continue")
+@patch("src.main.update_entry")
+@patch("src.main.download_with_re")
+@patch("src.main.questionary.select")
+@patch("src.main.get_failed_entries")
+def test_handle_retry_failed_rescrapes_movie(mock_get_failed, mock_select, mock_re, mock_update, mock_press, mock_extract_sources):
+    mock_get_failed.return_value = [
+        {
+            "id": 1,
+            "title": "Failed Movie",
+            "media_type": "movie",
+            "m3u8_url": "https://stream.com/expired.m3u8",
+            "output_path": "C:\\Downloads\\Failed Movie.mp4",
+            "page_url": "https://z2.idlixku.com/movie/failed-movie/"
+        }
+    ]
+    mock_select_obj = MagicMock()
+    mock_select_obj.ask.return_value = "🔄 Retry Semua yang Gagal"
+    mock_select.return_value = mock_select_obj
+
+    mock_extract_sources.return_value = {"m3u8_urls": ["https://stream.com/fresh.m3u8"]}
+    mock_re.return_value = True
+    mock_press_obj = MagicMock()
+    mock_press.return_value = mock_press_obj
+
+    from src.main import handle_retry_failed
+    handle_retry_failed("https://z2.idlixku.com/", {})
+
+    mock_extract_sources.assert_called_once_with("https://z2.idlixku.com/movie/failed-movie/")
+    mock_re.assert_called_once_with("https://stream.com/fresh.m3u8", "C:\\Downloads", "Failed Movie")
+    mock_update.assert_any_call(1, {"m3u8_url": "https://stream.com/fresh.m3u8"})
+    mock_update.assert_any_call(1, {"status": "success", "error": None})
+    mock_press.assert_called_once()
+
+
+@patch("src.main.extract_episode_sources")
+@patch("src.main.fetch_series_details")
+@patch("src.main.questionary.press_any_key_to_continue")
+@patch("src.main.update_entry")
+@patch("src.main.download_with_re")
+@patch("src.main.questionary.select")
+@patch("src.main.get_failed_entries")
+def test_handle_retry_failed_rescrapes_episode(mock_get_failed, mock_select, mock_re, mock_update, mock_press, mock_fetch_details, mock_extract_ep_sources):
+    mock_get_failed.return_value = [
+        {
+            "id": 2,
+            "title": "Failed Series S01E02",
+            "media_type": "episode",
+            "season": 1,
+            "episode": 2,
+            "m3u8_url": "https://stream.com/expired.m3u8",
+            "output_path": "C:\\Downloads\\Failed Series S01E02.mp4",
+            "page_url": "https://z2.idlixku.com/series/failed-series/"
+        }
+    ]
+    mock_select_obj = MagicMock()
+    mock_select_obj.ask.return_value = "🔄 Retry Semua yang Gagal"
+    mock_select.return_value = mock_select_obj
+
+    mock_fetch_details.return_value = {
+        "seasons": [
+            {
+                "season_num": 1,
+                "episodes": [
+                    {"episode_num": 1, "media_id": "101"},
+                    {"episode_num": 2, "media_id": "102"}
+                ]
+            }
+        ]
+    }
+    mock_extract_ep_sources.return_value = {"m3u8_urls": ["https://stream.com/fresh-episode.m3u8"]}
+    mock_re.return_value = True
+    mock_press_obj = MagicMock()
+    mock_press.return_value = mock_press_obj
+
+    from src.main import handle_retry_failed
+    handle_retry_failed("https://z2.idlixku.com/", {})
+
+    mock_fetch_details.assert_called_once_with("https://z2.idlixku.com/series/failed-series/")
+    mock_extract_ep_sources.assert_called_once_with("102", "https://z2.idlixku.com/series/failed-series/")
+    mock_re.assert_called_once_with("https://stream.com/fresh-episode.m3u8", "C:\\Downloads", "Failed Series S01E02")
+    mock_update.assert_any_call(2, {"m3u8_url": "https://stream.com/fresh-episode.m3u8"})
+    mock_update.assert_any_call(2, {"status": "success", "error": None})
+    mock_press.assert_called_once()
 
 
 @patch("src.main.search_content")
@@ -660,6 +763,41 @@ def test_handle_item_download_calls_print_download_summary_tv_series(
     assert len(summary_data["items"]) == 2
     assert summary_data["items"][0]["video_status"] == "SUCCESS"
     assert summary_data["items"][1]["video_status"] == "FAILED"
+
+
+@patch("src.main.extract_video_sources")
+@patch("src.main.verify_media_file")
+@patch("src.main.is_already_downloaded")
+@patch("src.main.add_entry")
+def test_process_download_item_movie_instant_skip(mock_add_entry, mock_is_dl, mock_verify, mock_extract):
+    mock_is_dl.return_value = True
+    mock_verify.return_value = {"video_status": "HEALTHY", "missing_subtitles": []}
+    
+    selected_item = {
+        "title": "Instant Movie 2026",
+        "type": "Movie",
+        "url": "https://z2.idlixku.com/movie/instant-movie"
+    }
+    summary = {
+        "total_items": 0,
+        "video_success": 0,
+        "video_failed": 0,
+        "video_skipped": 0,
+        "sub_success": 0,
+        "sub_failed": 0,
+        "items": []
+    }
+    config = {"movies_dir": "C:\\Downloads"}
+
+    from src.main import process_download_item
+    process_download_item(selected_item, "https://z2.idlixku.com/", config, summary, preset_sub_choice="Tanpa Subtitle", preset_download_dir="C:\\Downloads")
+
+    mock_is_dl.assert_called_once()
+    mock_verify.assert_called_once()
+    mock_extract.assert_not_called()  # Scraper harus di-bypass!
+    assert summary["video_skipped"] == 1
+    mock_add_entry.assert_called_once()
+
 
 
 
