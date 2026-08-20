@@ -114,7 +114,53 @@ class TestDownloadWithRe(unittest.TestCase):
             "TestMovie",
         )
         self.assertFalse(result)
-        mock_run.assert_not_called()
+    @patch("n_m3u8dl_manager.shutil.move")
+    @patch("n_m3u8dl_manager.os.remove")
+    @patch("n_m3u8dl_manager.os.path.exists")
+    @patch("n_m3u8dl_manager.subprocess.run")
+    @patch("n_m3u8dl_manager.ensure_binary")
+    def test_download_with_re_auto_heal(self, mock_ensure, mock_run, mock_exists, mock_remove, mock_move):
+        """If expected .mp4 is missing but .MUX.mp4 exists, auto-heal renames it and cleans up .ts."""
+        mock_ensure.return_value = r"C:\fake\.iamnotpirates\bin\N_m3u8DL-RE.exe"
+        mock_proc = MagicMock()
+        mock_proc.returncode = 0
+        mock_run.return_value = mock_proc
+
+        # Mock path existence for auto-heal scenario
+        mock_exists.side_effect = lambda path: ".MUX.mp4" in path or ".ts" in path
+
+        result = n_m3u8dl_manager.download_with_re(
+            "http://example.com/index.m3u8",
+            r"C:\output",
+            "TestMovie",
+        )
+        self.assertTrue(result)
+        mock_move.assert_called_once_with(r"C:\output\TestMovie.MUX.mp4", r"C:\output\TestMovie.mp4")
+        mock_remove.assert_called_once_with(r"C:\output\TestMovie.ts")
+
+    @patch("n_m3u8dl_manager.shutil.move")
+    @patch("n_m3u8dl_manager.os.remove")
+    @patch("n_m3u8dl_manager.os.path.exists")
+    @patch("n_m3u8dl_manager.subprocess.run")
+    @patch("n_m3u8dl_manager.ensure_binary")
+    def test_download_with_re_auto_heal_remove_fails(self, mock_ensure, mock_run, mock_exists, mock_remove, mock_move):
+        """Even if cleanup of .ts file fails, auto-heal should succeed."""
+        mock_ensure.return_value = r"C:\fake\.iamnotpirates\bin\N_m3u8DL-RE.exe"
+        mock_proc = MagicMock()
+        mock_proc.returncode = 1  # Subprocess failed/crashed
+        mock_run.return_value = mock_proc
+
+        mock_exists.side_effect = lambda path: ".MUX.mp4" in path or ".ts" in path
+        mock_remove.side_effect = OSError("Locked file")
+
+        result = n_m3u8dl_manager.download_with_re(
+            "http://example.com/index.m3u8",
+            r"C:\output",
+            "TestMovie",
+        )
+        self.assertTrue(result)
+        mock_move.assert_called_once_with(r"C:\output\TestMovie.MUX.mp4", r"C:\output\TestMovie.mp4")
+        mock_remove.assert_called_once_with(r"C:\output\TestMovie.ts")
 
 
 if __name__ == "__main__":

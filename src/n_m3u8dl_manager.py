@@ -5,6 +5,7 @@ and provides a subprocess wrapper to invoke it for HLS/DASH stream downloading.
 """
 import io
 import os
+import shutil
 import subprocess
 import zipfile
 
@@ -118,6 +119,28 @@ def download_with_re(
     if binary is None:
         return False
 
+    # 1. Batal awal jika file tujuan sudah ada tetapi terkunci oleh proses lain
+    expected_file = os.path.join(save_dir, f"{save_name}.mp4")
+    if os.path.exists(expected_file):
+        try:
+            os.remove(expected_file)
+        except OSError as exc:
+            msg = (
+                f"\n[bold red]⚠️ File '{expected_file}' sedang digunakan/dikunci oleh proses lain.[/bold red]\n"
+                f"[yellow]Penyebab: File mungkin sedang diputar di VLC/MPC atau di-index oleh Windows Explorer.\n"
+                f"Solusi  : Tutup media player atau jendela explorer lalu coba lagi (Detail: {exc})[/yellow]"
+            )
+            if console:
+                console.print(msg)
+            else:
+                print(msg)
+            return False
+
+    # 2. Isolasi direktori temporary ke SSD lokal (mencegah lock segment I/O pada drive Z:)
+    import tempfile
+    tmp_dir = os.path.join(tempfile.gettempdir(), "iamnotpirates_tmp")
+    os.makedirs(tmp_dir, exist_ok=True)
+
     cmd = [
         binary,
         m3u8_url,
@@ -127,11 +150,58 @@ def download_with_re(
         "--auto-select",
         "-M", "format=mp4",
         "--download-retry-count", "3",
+        "--tmp-dir", tmp_dir,
         "--no-log",
     ]
 
     try:
-        result = subprocess.run(cmd, check=False)
+        env = os.environ.copy()
+        ffmpeg_bin_dir = os.path.join(os.path.expanduser("~"), ".iamnotpirates", "bin")
+        if os.path.exists(ffmpeg_bin_dir):
+            env["PATH"] = ffmpeg_bin_dir + os.pathsep + env.get("PATH", "")
+
+        result = subprocess.run(cmd, check=False, env=env)
+
+        # Auto-heal: check if N_m3u8DL-RE finished but left MUX.mp4 due to rename failure on Windows
+        mux_file = os.path.join(save_dir, f"{save_name}.MUX.mp4")
+        ts_file = os.path.join(save_dir, f"{save_name}.ts")
+
+        if not os.path.exists(expected_file) and os.path.exists(mux_file):
+            msg = "[bold yellow]⚠️ Muxing selesai tetapi file belum di-rename. Melakukan auto-heal rename...[/bold yellow]"
+            if console:
+                console.print(msg)
+            else:
+                print(msg.replace("[bold yellow]", "").replace("[/bold yellow]", ""))
+            
+            import time
+            move_success = False
+            for attempt in range(5):
+                try:
+                    shutil.move(mux_file, expected_file)
+                    move_success = True
+                    break
+                except Exception as e:
+                    if attempt == 4:
+                        err_msg = f"[bold red]Gagal auto-heal rename setelah 5 percobaan: {e}[/bold red]"
+                        if console:
+                            console.print(err_msg)
+                        else:
+                            print(err_msg.replace("[bold red]", "").replace("[/bold red]", ""))
+                    else:
+                        time.sleep(1)
+
+            if move_success:
+                if os.path.exists(ts_file):
+                    try:
+                        os.remove(ts_file)
+                    except Exception as e:
+                        warn_msg = f"[yellow]⚠️ Gagal menghapus file temp .ts: {e}[/yellow]"
+                        if console:
+                            console.print(warn_msg)
+                        else:
+                            print(warn_msg.replace("[yellow]", "").replace("[/yellow]", ""))
+                return True
+
         return result.returncode == 0
     except KeyboardInterrupt:
         if console:
