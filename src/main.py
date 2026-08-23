@@ -947,34 +947,62 @@ def handle_search(active_url: str, config: dict) -> None:
         if not query or not query.strip():
             return
 
-        with console.status(f"[bold cyan]🔍 Searching for \"{query.strip()}\"... / Mencari \"{query.strip()}\"...[/bold cyan]", spinner="dots"):
-            items = search_content(active_url, query.strip())
-        if not items:
-            console.print(f"[yellow]Tidak ada hasil ditemukan untuk \"{query.strip()}\".[/yellow]")
-        else:
-            table = format_featured_table(items)
-            console.print(table)
+        clean_query = query.strip()
+        with console.status(f"[bold cyan]🔍 Mencari \"{clean_query}\" di IDLIX...[/bold cyan]", spinner="dots"):
+            idlix_items = search_content(active_url, clean_query)
 
-            action = questionary.select(
-                "Pilih Aksi:",
-                choices=[
-                    "📥 Download Film/Series (Single-select)",
-                    "🛒 Tambahkan ke Keranjang Download (Multi-select)",
-                    "🔍 Cari Judul Lain",
-                    "↩️ Kembali ke Menu Utama"
-                ]
-            ).ask()
+        tg_items = []
+        telegram_failed = False
+        try:
+            tg_items = [
+                it for it in scan_with_spinner(config)
+                if matches_query(it.get("title", ""), clean_query)
+            ]
+        except Exception:
+            telegram_failed = True
 
-            if action == "📥 Download Film/Series (Single-select)":
-                handle_item_download(items, active_url, config)
-                break
-            elif action == "🛒 Tambahkan ke Keranjang Download (Multi-select)":
-                handle_add_to_cart(items)
-                break
-            elif action == "🔍 Cari Judul Lain":
-                continue
-            else:
-                break
+        for item in tg_items:
+            item["__source__"] = "telegram"
+
+        rows = format_hybrid_results(idlix_items, tg_items)
+        if not rows:
+            console.print(f"[yellow]Tidak ada hasil ditemukan untuk \"{clean_query}\".[/yellow]")
+            continue
+
+        if telegram_failed:
+            console.print("[dim]ℹ️ Pencarian backup Telegram dilewati (tidak terhubung).[/dim]")
+        console.print(format_hybrid_table(rows))
+
+        raw = questionary.text(
+            f"Pilih nomor item untuk diproses (1-{len(rows)}, kosongkan untuk kembali):"
+        ).ask()
+        if not raw or not raw.strip().isdecimal() or not (1 <= int(raw) <= len(rows)):
+            console.print("[yellow]Pilihan dibatalkan.[/yellow]")
+            return
+        chosen = rows[int(raw) - 1]
+
+        if chosen.get("__source__") == "telegram":
+            if _confirm_or_proceed(f"Restore '{chosen['title']}' dari Telegram ke lokal?"):
+                try:
+                    client = create_client(config)
+                    try:
+                        out_path = restore_backup(client, chosen, config)
+                    finally:
+                        client.disconnect()
+                    print_success(f"Restore selesai: {out_path}")
+                except Exception as exc:
+                    print_error(f"Restore gagal: {exc}")
+            _pause()
+            return
+
+        summary = {
+            "total_items": 0, "video_success": 0, "video_failed": 0,
+            "video_skipped": 0, "sub_success": 0, "sub_failed": 0, "items": [],
+        }
+        process_download_item(chosen, active_url, config, summary)
+        print_download_summary(summary)
+        _pause()
+        return
 
 def require_telegram_ready(config: dict) -> bool:
     if not ensure_telethon(console):

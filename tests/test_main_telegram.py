@@ -197,3 +197,50 @@ def test_delete_local_wrong_word_aborts(tmp_path, monkeypatch):
         main_mod.handle_telegram_delete_local({})
 
     assert real_risky.exists()
+
+
+@patch("src.main.handle_item_download")
+@patch("src.main.process_download_item")
+@patch("src.main.restore_backup", return_value="C:/r/X.mp4")
+@patch("src.main.create_client")
+@patch("src.main.scan_with_spinner")
+@patch("src.main.search_content")
+@patch("src.main.questionary.text")
+@patch("src.main.questionary.confirm")
+@patch("src.main.questionary.press_any_key_to_continue")
+def test_handle_search_routes_telegram_result_to_restore(
+    _press, mock_confirm, mock_text, mock_search, mock_scan, mock_client, mock_restore, mock_proc, mock_hid
+):
+    mock_text.return_value = MagicMock(ask=MagicMock(side_effect=[
+        "dupe",      # query pencarian
+        "2",         # pilih nomor item hybrid (baris TELEGRAM; idlix selalu baris lebih dulu)
+    ]))
+    mock_search.return_value = [{"title": "Dupe Film", "type": "Movie", "url": "https://x/dupe-film"}]
+    mock_scan.return_value = [{
+        "title": "Dupe Film", "year": "2024", "media_type": "movie",
+        "season": None, "episode": None, "file_size": 9, "part_count": 1,
+        "subtitles": [], "video_msg_ids": [7], "sub_msg_ids": [], "chat": "me",
+    }]
+    mock_confirm.return_value = MagicMock(ask=MagicMock(return_value=True))
+
+    main_mod.handle_search("https://z2.idlixku.com/", {"active_url": "https://z2.idlixku.com/"})
+
+    mock_restore.assert_called_once()
+    called_item = mock_restore.call_args[0][1]
+    assert called_item["__source__"] == "telegram"
+    mock_proc.assert_not_called()
+    mock_hid.assert_not_called()
+
+
+@patch("src.main.process_download_item")
+@patch("src.main.scan_with_spinner", side_effect=Exception("offline"))
+@patch("src.main.search_content")
+@patch("src.main.questionary.text")
+@patch("src.main.questionary.press_any_key_to_continue")
+def test_handle_search_survives_telegram_failure(
+    _press, mock_text, mock_search, mock_scan, mock_proc
+):
+    mock_text.return_value = MagicMock(ask=MagicMock(side_effect=["anything", "1"]))
+    mock_search.return_value = [{"title": "Any Film", "type": "Movie", "url": "https://x/any"}]
+    main_mod.handle_search("https://z2.idlixku.com/", {"active_url": "u"})
+    mock_proc.assert_called_once()
