@@ -160,12 +160,16 @@ def ensure_telethon(console) -> bool:
         import questionary
         answer = questionary.confirm("Install library telethon sekarang?").ask()
         if answer:
-            subprocess.run([sys.executable, "-m", "pip", "install", "telethon"], check=False)
+            try:
+                subprocess.run(["uv", "pip", "install", "telethon"], check=False)
+            except OSError:
+                pass
             try:
                 import telethon
                 return True
             except ImportError:
                 pass
+            console.print("[dim]Jalankan manual: uv pip install telethon (atau pip install telethon)[/dim]")
         console.print("[red]Telethon dibutuhkan untuk fitur ini.[/red]")
         return False
 
