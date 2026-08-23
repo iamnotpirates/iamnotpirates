@@ -330,6 +330,50 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
     return {"video_msg_ids": video_msg_ids, "sub_msg_ids": sub_msg_ids, "forwarded_to": forwarded_to}
 
 
+def collect_local_entries() -> list:
+    from src.db_manager import load_log
+    best = {}
+    for entry in load_log():
+        if entry.get("status") != "success":
+            continue
+        path = entry.get("output_path") or ""
+        if not path or not os.path.exists(path):
+            continue
+        key = entry_backup_key(entry)
+        year_match = re.search(r"\b(19\d\d|20\d\d)\b", entry.get("title", ""))
+        candidate = {
+            "title": entry.get("title", ""),
+            "year": entry.get("year") or (year_match.group(1) if year_match else ""),
+            "media_type": entry.get("media_type", "movie"),
+            "season": entry.get("season"),
+            "episode": entry.get("episode"),
+            "output_path": path,
+            "file_size": os.path.getsize(path),
+            "backed": False,
+            "_ts": entry.get("timestamp", ""),
+            "key": key,
+        }
+        if key not in best or candidate["_ts"] >= best[key]["_ts"]:
+            best[key] = candidate
+    result = list(best.values())
+    for entry in result:
+        entry.pop("_ts", None)
+    return result
+
+
+def mark_backed_entries(local_entries: list, scanned_items: list) -> list:
+    scanned_keys = {
+        backup_key(it.get("title", ""), it.get("year"), it.get("season"), it.get("episode"))
+        for it in scanned_items
+    }
+    marked = []
+    for entry in local_entries:
+        clone = dict(entry)
+        clone["backed"] = clone.get("key") in scanned_keys
+        marked.append(clone)
+    return marked
+
+
 def build_restore_target(config: dict, item: dict) -> tuple:
     from src.config_manager import get_download_dir
     from src.downloader import format_tv_paths

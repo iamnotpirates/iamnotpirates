@@ -482,3 +482,36 @@ def test_restore_raises_ioerror_on_size_mismatch_keeps_parts(tmp_path, monkeypat
     with pytest.raises(IOError):
         restore_backup(client, dict(MOVIE_ITEM, video_msg_ids=[31]), config)
     assert os.listdir(str(tmp_path / "tmp")) != []
+
+
+from src.telegram_manager import collect_local_entries, mark_backed_entries
+
+
+def test_collect_local_entries_dedupes_and_filters_existing(monkeypatch, tmp_path):
+    import src.db_manager as dbm
+    real_file = tmp_path / "Film A.mp4"
+    real_file.write_bytes(b"data")
+    rows = [
+        {"status": "success", "title": "Film A", "season": None, "episode": None,
+         "output_path": str(real_file), "timestamp": "2026-01-01"},
+        {"status": "success", "title": "Film A", "season": None, "episode": None,
+         "output_path": str(real_file), "timestamp": "2026-01-02"},
+        {"status": "failed", "title": "Film F", "season": None, "episode": None,
+         "output_path": str(real_file)},
+        {"status": "success", "title": "Hilang", "season": None, "episode": None,
+         "output_path": "Z:/tidak/ada.mp4"},
+    ]
+    monkeypatch.setattr(dbm, "load_log", lambda db_path=None: rows)
+    entries = collect_local_entries()
+    assert [e["title"] for e in entries] == ["Film A"]
+    assert entries[0]["file_size"] == 4
+    assert entries[0]["backed"] is False
+
+
+def test_mark_backed_entries_matches_scan_keys():
+    from src.telegram_manager import backup_key as bk, mark_backed_entries as mbe
+    local = [{"title": "Film A", "key": bk("Film A", "2024", None, None)}]
+    scanned = [{"title": "Film A", "year": "2024", "season": None, "episode": None}]
+    assert mbe(local, scanned)[0]["backed"] is True
+    other = [{"title": "Lain", "key": bk("Lain", "", None, None)}]
+    assert mbe(other, scanned)[0]["backed"] is False
