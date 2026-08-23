@@ -163,7 +163,7 @@ def test_login_flow_rejects_non_numeric_api_id(monkeypatch):
     answers = iter(["abc", "h"])
     monkeypatch.setattr(
         "questionary.text",
-        lambda _prompt: MagicMock(ask=lambda: next(answers)),
+        lambda _prompt, **_kwargs: MagicMock(ask=lambda: next(answers)),
     )
     saved = {}
     monkeypatch.setattr(tm, "save_config_key", lambda key, value: saved.setdefault(key, value))
