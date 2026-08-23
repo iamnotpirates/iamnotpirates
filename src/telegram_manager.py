@@ -417,16 +417,23 @@ def restore_backup(client, item: dict, config: dict, progress_callback=None) -> 
         part_files.append(downloaded)
 
     output_path = os.path.join(target_dir, filename)
-    merge_files(part_files, output_path)
+    merging_path = output_path + ".merging"
+    merge_files(part_files, merging_path)
 
     expected_size = item.get("file_size", 0)
-    actual_size = os.path.getsize(output_path)
+    actual_size = os.path.getsize(merging_path)
     if actual_size != expected_size:
+        try:
+            os.remove(merging_path)
+        except OSError:
+            pass
         raise IOError(
             f"Verifikasi ukuran gagal untuk '{filename}': "
             f"diharapkan {expected_size}, didapat {actual_size}. "
-            f"Part sementara tetap disimpan di {TMP_SPLIT_DIR}."
+            f"File rusak tidak jadi disimpan; part sementara tetap disimpan di {TMP_SPLIT_DIR}."
         )
+
+    os.replace(merging_path, output_path)
 
     cleanup_parts(part_files)
 

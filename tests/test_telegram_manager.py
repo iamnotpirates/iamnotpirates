@@ -479,9 +479,15 @@ def test_restore_raises_ioerror_on_size_mismatch_keeps_parts(tmp_path, monkeypat
         "movies_dir": str(tmp_path / "Movies"),
         "series_dir": str(tmp_path / "Series"),
     }
+    item = dict(MOVIE_ITEM, video_msg_ids=[31])
+    target_dir, filename = build_restore_target(config, item)
+    expected_output = os.path.join(target_dir, filename)
     with pytest.raises(IOError):
-        restore_backup(client, dict(MOVIE_ITEM, video_msg_ids=[31]), config)
+        restore_backup(client, item, config)
     assert os.listdir(str(tmp_path / "tmp")) != []
+    leftovers = [f for f in os.listdir(target_dir) if f.endswith(".merging")]
+    assert leftovers == []
+    assert not os.path.exists(expected_output)
 
 
 from src.telegram_manager import collect_local_entries, mark_backed_entries
