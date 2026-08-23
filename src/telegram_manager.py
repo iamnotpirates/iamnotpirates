@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
 from typing import Optional
 
 from src.db_manager import save_config_key
@@ -254,3 +255,79 @@ def scan_backups(client, destinations: list) -> list:
             if current and len(current["video_msg_ids"]) < current.get("part_count", 1):
                 current["video_msg_ids"].append(msg.id)
     return items
+
+
+def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
+                  destinations: list, progress_callback=None,
+                  tmp_dir: Optional[str] = None) -> dict:
+    if not destinations:
+        raise ValueError("Tujuan backup Telegram belum diatur.")
+    primary_target = destinations[0]["target"]
+    size = os.path.getsize(file_path)
+    part_count = math.ceil(size / PART_SIZE) if size > PART_SIZE else 1
+    video_meta = {
+        "kind": "video",
+        "title": meta.get("title", ""),
+        "year": meta.get("year", ""),
+        "media_type": meta.get("media_type", "movie"),
+        "season": meta.get("season"),
+        "episode": meta.get("episode"),
+        "file_size": size,
+        "part_count": part_count,
+        "subtitles": [os.path.basename(p) for p in sub_paths],
+    }
+    caption = build_caption(video_meta)
+    video_msg_ids = []
+    part_files = []
+    unique_tmp_dir = None
+    try:
+        if part_count == 1:
+            msg = client.send_file(
+                primary_target, file_path, caption=caption,
+                force_document=False, supports_streaming=True,
+                progress_callback=progress_callback,
+            )
+            video_msg_ids.append(msg.id)
+        else:
+            if tmp_dir is None:
+                os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
+                unique_tmp_dir = tempfile.mkdtemp(prefix="up_", dir=TMP_SPLIT_DIR)
+                split_dir = unique_tmp_dir
+            else:
+                split_dir = tmp_dir
+            part_files = split_file(file_path, part_size=PART_SIZE, tmp_dir=split_dir)
+            for index, part_path in enumerate(part_files):
+                msg = client.send_file(
+                    primary_target, part_path,
+                    caption=caption if index == 0 else "",
+                    force_document=True,
+                    progress_callback=progress_callback,
+                )
+                video_msg_ids.append(msg.id)
+    finally:
+        cleanup_parts(part_files)
+        if unique_tmp_dir is not None:
+            try:
+                os.rmdir(unique_tmp_dir)
+            except OSError:
+                pass
+
+    sub_msg_ids = []
+    for sub_path in sub_paths:
+        sub_meta = {
+            "kind": "subtitle",
+            "filename": os.path.basename(sub_path),
+            "parent_title": video_meta["title"],
+        }
+        smsg = client.send_file(
+            primary_target, sub_path, caption=build_caption(sub_meta),
+            force_document=True,
+        )
+        sub_msg_ids.append(smsg.id)
+
+    forwarded_to = []
+    for destination in destinations[1:]:
+        client.forward_messages(destination["target"], video_msg_ids + sub_msg_ids, primary_target)
+        forwarded_to.append(destination["target"])
+
+    return {"video_msg_ids": video_msg_ids, "sub_msg_ids": sub_msg_ids, "forwarded_to": forwarded_to}

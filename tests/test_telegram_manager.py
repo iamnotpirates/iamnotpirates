@@ -281,3 +281,91 @@ def test_scan_returns_empty_without_destination():
 def test_scan_subtitle_before_any_video_is_ignored():
     messages = [FakeMsg(1, caption=build_caption(SUB_META), file_name="x.srt")]
     assert scan_backups(FakeClient({"me": messages}), DESTS) == []
+
+
+import json
+
+from src.telegram_manager import upload_backup
+
+
+class RecordingClient:
+    """Fake Telethon client yang merekam send_file/forward_messages."""
+
+    def __init__(self):
+        self.sent = []
+        self.forwards = []
+        self._id = 100
+
+    def send_file(self, target, path, caption="", force_document=False,
+                  supports_streaming=False, progress_callback=None):
+        self._id += 1
+        self.sent.append({
+            "target": target, "path": path, "caption": caption,
+            "force_document": force_document, "supports_streaming": supports_streaming,
+        })
+        msg = MagicMock()
+        msg.id = self._id
+        return msg
+
+    def forward_messages(self, target, ids, from_peer):
+        self.forwards.append((target, list(ids), from_peer))
+        return [MagicMock() for _ in ids]
+
+
+def _make_big_file(tmp_path, size):
+    path = tmp_path / "Big Movie.mp4"
+    path.write_bytes(b"x" * size)
+    return str(path)
+
+
+META = {"title": "Film B", "year": "2025", "media_type": "movie",
+        "season": None, "episode": None, "subtitles": []}
+UPLOAD_DESTS = [{"type": "saved", "target": "me"}, {"type": "channel", "target": "@c"}]
+
+
+def test_upload_single_part_streams_and_forwards(tmp_path):
+    src = _make_big_file(tmp_path, 1000)
+    client = RecordingClient()
+    result = upload_backup(client, src, [], dict(META), UPLOAD_DESTS)
+    assert len(client.sent) == 1
+    sent = client.sent[0]
+    assert sent["force_document"] is False
+    assert sent["supports_streaming"] is True
+    assert '"kind": "video"' in sent["caption"].replace("'", '"')
+    assert '"part_count": 1' in sent["caption"].replace("'", '"')
+    assert result["video_msg_ids"] == [101]
+    assert result["forwarded_to"] == ["@c"]
+    assert client.forwards == [("@c", [101], "me")]
+
+
+def test_upload_multi_part_splits_captions_first_part_only_and_cleans_temp(monkeypatch, tmp_path):
+    import src.telegram_manager as tm
+    monkeypatch.setattr(tm, "PART_SIZE", 1300)
+    src = _make_big_file(tmp_path, 2500)
+    parts_dir = tmp_path / "parts"
+    client = RecordingClient()
+    result = upload_backup(client, src, [], dict(META),
+                           [UPLOAD_DESTS[0]], progress_callback=None, tmp_dir=str(parts_dir))
+    assert len(client.sent) == 2
+    caps = [s["caption"] for s in client.sent]
+    first_meta = json.loads(caps[0].split("```json")[1].strip().strip("`"))
+    assert first_meta["part_count"] == 2
+    assert first_meta["file_size"] == 2500
+    assert caps[1] == ""
+    assert all(s["force_document"] for s in client.sent)
+    assert parts_dir.exists()
+    assert list(parts_dir.glob("*")) == []
+    assert len(result["video_msg_ids"]) == 2
+
+
+def test_upload_subtitles_as_documents_with_marker_caption(tmp_path):
+    src = _make_big_file(tmp_path, 100)
+    sub = tmp_path / "Film B.id.srt"
+    sub.write_text("SUB")
+    client = RecordingClient()
+    upload_backup(client, src, [str(sub)], dict(META), [UPLOAD_DESTS[0]])
+    assert len(client.sent) == 2
+    sub_sent = client.sent[1]
+    assert sub_sent["force_document"] is True
+    assert '"kind": "subtitle"' in sub_sent["caption"].replace("'", '"')
+    assert "Film B.id.srt" in sub_sent["caption"]
