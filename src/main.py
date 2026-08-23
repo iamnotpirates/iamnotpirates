@@ -1131,16 +1131,151 @@ def handle_telegram_list(config: dict) -> None:
     _pause()
 
 
+def _local_listing_with_backup_status(config: dict) -> list:
+    entries = collect_local_entries()
+    try:
+        scanned = scan_with_spinner(config)
+    except Exception:
+        scanned = []
+        console.print("[yellow]⚠️ Tidak bisa menghubungi Telegram — status backup tidak diketahui.[/yellow]")
+    return mark_backed_entries(entries, scanned)
+
+
+def _rich_progress(total: int, description: str):
+    from rich.progress import Progress, BarColumn, TextColumn, TransferSpeedColumn
+    progress = Progress(
+        TextColumn("[bold blue]" + description + "[/bold blue]"),
+        BarColumn(),
+        TextColumn("{task.percentage:>3.0f}%"),
+        TransferSpeedColumn(),
+        console=console,
+    )
+    task_id = progress.add_task(description, total=total)
+
+    def callback(current: int, total_bytes: int):
+        progress.update(task_id, completed=current)
+
+    return progress, callback
+
+
 def handle_telegram_manual_backup(config: dict) -> None:
     if not require_telegram_ready(config):
         return
-    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+    entries = _local_listing_with_backup_status(config)
+    if not entries:
+        console.print("[yellow]Tidak ada file lokal yang tercatat sukses di log.[/yellow]")
+        return
+    console.print(format_local_delete_table(entries))
+    labels = []
+    for idx, entry in enumerate(entries, start=1):
+        if entry["backed"]:
+            labels.append(f"{idx}. ✅ {entry['title']} (duplikat)")
+        else:
+            labels.append(f"{idx}. {entry['title']}")
+    picked = questionary.checkbox(
+        "Pilih item untuk di-backup ke Telegram (SPACE pilih, ENTER lanjut):",
+        choices=labels
+    ).ask()
+    if not picked:
+        console.print("[yellow]Tidak ada item dipilih.[/yellow]")
+        return
+    chosen_indices = [int(label.split(".")[0]) - 1 for label in picked]
+    destinations = get_destinations(config)
+    if not destinations:
+        print_error("Tujuan backup belum valid. Atur di ⚙️ Pengaturan Telegram.")
+        return
+    success_count = 0
+    fail_count = 0
+    client = create_client(config)
+    try:
+        for pos, idx in enumerate(chosen_indices, start=1):
+            entry = entries[idx]
+            if not os.path.exists(entry["output_path"]):
+                print_error(f"File tidak ditemukan, di-skip: {entry['output_path']}")
+                fail_count += 1
+                continue
+            console.print(f"\n[bold cyan]=== Backup {pos}/{len(chosen_indices)}: {entry['title']} ===[/bold cyan]")
+            sub_dir = os.path.dirname(entry["output_path"])
+            sub_paths = [
+                os.path.join(sub_dir, name)
+                for name in sorted(os.listdir(sub_dir))
+                if name.lower().endswith(".srt") and os.path.splitext(name)[0].startswith(os.path.splitext(os.path.basename(entry["output_path"]))[0])
+            ]
+            meta = {
+                "title": entry["title"], "year": entry["year"],
+                "media_type": entry["media_type"], "season": entry["season"],
+                "episode": entry["episode"], "subtitles": [],
+            }
+            try:
+                progress, cb = _rich_progress(entry["file_size"], entry["title"])
+                with progress:
+                    upload_backup(client, entry["output_path"], sub_paths, meta, destinations, progress_callback=cb)
+                print_success(f"Berhasil backup: {entry['title']}")
+                success_count += 1
+            except Exception as exc:
+                print_error(f"Gagal backup {entry['title']}: {exc}")
+                fail_count += 1
+    finally:
+        client.disconnect()
+    console.print(f"\n[bold]Selesai: {success_count} berhasil, {fail_count} gagal.[/bold]")
+    _pause()
 
 
 def handle_telegram_delete_local(config: dict) -> None:
     if not require_telegram_ready(config):
         return
-    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+    entries = _local_listing_with_backup_status(config)
+    if not entries:
+        console.print("[yellow]Tidak ada file lokal yang tercatat sukses di log.[/yellow]")
+        return
+    console.print(format_local_delete_table(entries))
+    labels = []
+    for idx, entry in enumerate(entries, start=1):
+        if entry["backed"]:
+            labels.append(f"{idx}. ✅ {entry['title']} (aman)")
+        else:
+            labels.append(f"{idx}. ⚠️ {entry['title']} (BELUM DIBACKUP)")
+    picked = questionary.checkbox(
+        "Pilih file lokal yang ingin DIHAPUS (SPACE pilih, ENTER lanjut):",
+        choices=labels
+    ).ask()
+    if not picked:
+        console.print("[yellow]Tidak ada file dipilih.[/yellow]")
+        return
+    deleted = 0
+    for label in picked:
+        idx = int(label.split(".")[0]) - 1
+        entry = entries[idx]
+        path = entry["output_path"]
+        if entry["backed"]:
+            ok = _confirm_or_proceed(f"Hapus '{path}'? (sudah aman di Telegram)")
+            if not ok:
+                continue
+            os.remove(path)
+            deleted += 1
+            print_success(f"Dihapus: {path}")
+        else:
+            console.print(f"\n[bold red]⛔ PERINGATAN: '{entry['title']}' TIDAK ditemukan di Telegram![/bold red]")
+            console.print("[bold red]Jika dihapus, file hilang PERMANEN dan tidak bisa dipulihkan![/bold red]")
+            ok = _confirm_or_proceed("Saya mengerti risikonya — lanjutkan penghapusan?")
+            if not ok:
+                console.print("[yellow]Penghapusan dibatalkan.[/yellow]")
+                continue
+            typed = questionary.text("Ketik HAPUS untuk mengonfirmasi permanen:").ask()
+            if typed != "HAPUS":
+                console.print("[yellow]Konfirmasi salah — penghapusan dibatalkan.[/yellow]")
+                continue
+            os.remove(path)
+            deleted += 1
+            print_success(f"Dihapus permanen: {path}")
+        parent = os.path.dirname(path)
+        try:
+            if parent and not os.listdir(parent):
+                os.rmdir(parent)
+        except OSError:
+            pass
+    console.print(f"\n[bold]Selesai: {deleted} file dihapus.[/bold]")
+    _pause()
 
 
 def handle_telegram_menu(active_url: str, config: dict) -> None:

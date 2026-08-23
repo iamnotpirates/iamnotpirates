@@ -121,3 +121,79 @@ def test_handle_telegram_search_superscript_pick_cancels_gracefully(
     handle_telegram_search_restore({})
     assert "Restore dibatalkan" in capsys.readouterr().out
     mock_restore.assert_not_called()
+
+
+LOCAL_ENTRIES = [
+    {"title": "Safe Film", "year": "2024", "media_type": "movie", "season": None,
+     "episode": None, "output_path": "C:/safe.mp4", "file_size": 5, "backed": True,
+     "key": "safefilm|2024||"},
+    {"title": "Risky Film", "year": "2025", "media_type": "movie", "season": None,
+     "episode": None, "output_path": "C:/risky.mp4", "file_size": 6, "backed": False,
+     "key": "riskyfilm|2025||"},
+]
+
+
+def test_manual_backup_calls_upload_per_selection(tmp_path, monkeypatch):
+    real_file = tmp_path / "Safe Film.mp4"
+    real_file.write_bytes(b"x" * 5)
+    entries = [dict(LOCAL_ENTRIES[0], output_path=str(real_file))]
+    monkeypatch.setattr(main_mod, "collect_local_entries", lambda: entries)
+    monkeypatch.setattr(main_mod, "scan_with_spinner", lambda cfg: [])
+    monkeypatch.setattr(main_mod, "require_telegram_ready", lambda cfg: True)
+
+    uploads = []
+
+    def fake_upload(client, path, subs, meta, dests, progress_callback=None):
+        uploads.append((path, meta))
+        return {"video_msg_ids": [1], "sub_msg_ids": [], "forwarded_to": []}
+
+    monkeypatch.setattr(main_mod, "upload_backup", fake_upload)
+    monkeypatch.setattr(main_mod, "create_client", lambda cfg: MagicMock())
+
+    with patch("src.main.questionary.checkbox") as mock_check, \
+         patch("src.main.questionary.press_any_key_to_continue"):
+        mock_check.return_value = MagicMock(ask=MagicMock(return_value=["1. ✅ Safe Film (duplikat)"]))
+        main_mod.handle_telegram_manual_backup({})
+
+    assert len(uploads) == 1
+    assert uploads[0][0] == str(real_file)
+
+
+def test_delete_local_requires_typed_confirmation_for_unbacked(tmp_path, monkeypatch):
+    real_risky = tmp_path / "Risky Film.mp4"
+    real_risky.write_bytes(b"y" * 6)
+    entries = [dict(LOCAL_ENTRIES[1], output_path=str(real_risky))]
+    monkeypatch.setattr(main_mod, "collect_local_entries", lambda: entries)
+    monkeypatch.setattr(main_mod, "scan_with_spinner", lambda cfg: [])
+    monkeypatch.setattr(main_mod, "require_telegram_ready", lambda cfg: True)
+
+    with patch("src.main.questionary.checkbox") as mock_check, \
+         patch("src.main.questionary.confirm") as mock_confirm, \
+         patch("src.main.questionary.text") as mock_text, \
+         patch("src.main.questionary.press_any_key_to_continue"):
+        mock_check.return_value = MagicMock(ask=MagicMock(return_value=["1. ⚠️ Risky Film (BELUM DIBACKUP)"]))
+        mock_confirm.return_value = MagicMock(ask=MagicMock(return_value=True))
+        mock_text.return_value = MagicMock(ask=MagicMock(return_value="HAPUS"))
+        main_mod.handle_telegram_delete_local({})
+
+    assert not real_risky.exists()
+
+
+def test_delete_local_wrong_word_aborts(tmp_path, monkeypatch):
+    real_risky = tmp_path / "Risky Film.mp4"
+    real_risky.write_bytes(b"y" * 6)
+    entries = [dict(LOCAL_ENTRIES[1], output_path=str(real_risky))]
+    monkeypatch.setattr(main_mod, "collect_local_entries", lambda: entries)
+    monkeypatch.setattr(main_mod, "scan_with_spinner", lambda cfg: [])
+    monkeypatch.setattr(main_mod, "require_telegram_ready", lambda cfg: True)
+
+    with patch("src.main.questionary.checkbox") as mock_check, \
+         patch("src.main.questionary.confirm") as mock_confirm, \
+         patch("src.main.questionary.text") as mock_text, \
+         patch("src.main.questionary.press_any_key_to_continue"):
+        mock_check.return_value = MagicMock(ask=MagicMock(return_value=["1. ⚠️ Risky Film (BELUM DIBACKUP)"]))
+        mock_confirm.return_value = MagicMock(ask=MagicMock(return_value=True))
+        mock_text.return_value = MagicMock(ask=MagicMock(return_value="salah"))
+        main_mod.handle_telegram_delete_local({})
+
+    assert real_risky.exists()
