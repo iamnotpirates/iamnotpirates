@@ -180,6 +180,9 @@ def login_flow(console, config: dict) -> bool:
             return False
         api_id = api_id.strip()
         api_hash = api_hash.strip()
+        if not api_id.isdigit():
+            console.print("[red]API ID harus berupa angka.[/red]")
+            return False
         save_config_key("tg_api_id", api_id)
         save_config_key("tg_api_hash", api_hash)
         config["tg_api_id"] = api_id

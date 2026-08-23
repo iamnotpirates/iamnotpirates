@@ -156,3 +156,16 @@ def test_create_client_passes_credentials(monkeypatch):
     client = create_client({"tg_api_id": "123", "tg_api_hash": "hash"})
     fake_ctor.assert_called_once_with(tm.SESSION_PATH, 123, "hash")
     assert client is fake_ctor.return_value
+
+
+def test_login_flow_rejects_non_numeric_api_id(monkeypatch):
+    import src.telegram_manager as tm
+    answers = iter(["abc", "h"])
+    monkeypatch.setattr(
+        "questionary.text",
+        lambda _prompt: MagicMock(ask=lambda: next(answers)),
+    )
+    saved = {}
+    monkeypatch.setattr(tm, "save_config_key", lambda key, value: saved.setdefault(key, value))
+    assert tm.login_flow(MagicMock(), {}) is False
+    assert saved == {}
