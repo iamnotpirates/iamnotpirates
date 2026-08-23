@@ -481,3 +481,4 @@ def test_restore_raises_ioerror_on_size_mismatch_keeps_parts(tmp_path, monkeypat
     }
     with pytest.raises(IOError):
         restore_backup(client, dict(MOVIE_ITEM, video_msg_ids=[31]), config)
+    assert os.listdir(str(tmp_path / "tmp")) != []
