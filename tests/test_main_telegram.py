@@ -123,6 +123,44 @@ def test_handle_telegram_search_superscript_pick_cancels_gracefully(
     mock_restore.assert_not_called()
 
 
+TWIN_ITEMS = [
+    {"title": "Film A", "year": "2024", "media_type": "movie", "season": None,
+     "episode": None, "file_size": 10, "part_count": 1, "subtitles": [],
+     "video_msg_ids": [1], "sub_msg_ids": [], "chat": "me"},
+    {"title": "Film A", "year": "2024", "media_type": "movie", "season": None,
+     "episode": None, "file_size": 10, "part_count": 1, "subtitles": [],
+     "video_msg_ids": [9], "sub_msg_ids": [], "chat": "@c"},
+]
+
+
+@patch("subprocess.Popen")
+@patch("src.main.questionary.press_any_key_to_continue")
+@patch("src.main.questionary.confirm", return_value=MagicMock(ask=MagicMock(return_value=True)))
+@patch("src.main.restore_backup", side_effect=[Exception("boom"), "C:/ok/Film A.mp4"])
+@patch("src.main.create_client")
+@patch("src.main.get_destinations",
+       return_value=[{"type": "saved", "target": "me"}, {"type": "channel", "target": "@c"}])
+@patch("src.main.scan_with_spinner", return_value=TWIN_ITEMS)
+@patch("src.main.questionary.text")
+@patch("src.main.require_telegram_ready", return_value=True)
+def test_handle_telegram_search_restores_falls_back_to_twin_chat(
+    mock_ready, mock_text, mock_scan, mock_get_dests, mock_client,
+    mock_restore, mock_confirm, mock_press, mock_popen, capsys
+):
+    from src.main import handle_telegram_search_restore
+
+    mock_text.return_value = MagicMock(ask=MagicMock(side_effect=[
+        "film a",  # query pencarian
+        "1",       # pilih nomor item hasil filter
+    ]))
+    handle_telegram_search_restore({})
+
+    assert mock_restore.call_count == 2
+    second_item = mock_restore.call_args_list[1][0][1]
+    assert second_item["chat"] == "@c"
+    assert "Restore selesai" in capsys.readouterr().out
+
+
 LOCAL_ENTRIES = [
     {"title": "Safe Film", "year": "2024", "media_type": "movie", "season": None,
      "episode": None, "output_path": "C:/safe.mp4", "file_size": 5, "backed": True,

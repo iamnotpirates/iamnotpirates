@@ -986,11 +986,7 @@ def handle_search(active_url: str, config: dict) -> None:
         if chosen.get("__source__") == "telegram":
             if _confirm_or_proceed(f"Restore '{chosen['title']}' dari Telegram ke lokal?"):
                 try:
-                    client = create_client(config)
-                    try:
-                        out_path = restore_backup(client, chosen, config)
-                    finally:
-                        client.disconnect()
+                    out_path = _restore_from_telegram(config, chosen)
                     print_success(f"Restore selesai: {out_path}")
                 except Exception as exc:
                     print_error(f"Restore gagal: {exc}")
@@ -1023,6 +1019,46 @@ def scan_with_spinner(config: dict) -> list:
         finally:
             client.disconnect()
     return items
+
+
+def _backup_key_of(item: dict) -> str:
+    return tm.backup_key(
+        item.get("title", ""), item.get("year"),
+        item.get("season"), item.get("episode"),
+    )
+
+
+def _restore_from_telegram(config: dict, chosen: dict) -> str:
+    client = create_client(config)
+    try:
+        try:
+            progress, cb = _rich_progress(
+                chosen.get("file_size", 0), f"⬇️ {chosen.get('title', '')}"
+            )
+            with progress:
+                return restore_backup(client, chosen, config, progress_callback=cb)
+        except Exception as exc:
+            if len(get_destinations(config)) > 1:
+                items = scan_with_spinner(config)
+                candidate = next(
+                    (it for it in items
+                     if _backup_key_of(it) == _backup_key_of(chosen)
+                     and it.get("chat") != chosen.get("chat")),
+                    None,
+                )
+                if candidate is not None:
+                    retry_progress, retry_cb = _rich_progress(
+                        candidate.get("file_size", 0), f"⬇️ {candidate.get('title', '')}"
+                    )
+                    try:
+                        with retry_progress:
+                            return restore_backup(client, candidate, config,
+                                                  progress_callback=retry_cb)
+                    except Exception:
+                        pass
+            raise exc
+    finally:
+        client.disconnect()
 
 
 def handle_telegram_settings(config: dict) -> None:
@@ -1124,12 +1160,7 @@ def handle_telegram_search_restore(config: dict) -> None:
     if not _confirm_or_proceed(f"Restore '{chosen['title']}' ke folder lokal sekarang?"):
         return
     try:
-        client = create_client(config)
-        try:
-            with console.status("[bold cyan]⬇️ Mengunduh dari Telegram... / Downloading...[/bold cyan]", spinner="dots"):
-                out_path = restore_backup(client, chosen, config)
-        finally:
-            client.disconnect()
+        out_path = _restore_from_telegram(config, chosen)
     except Exception as exc:
         print_error(f"Restore gagal: {exc}")
         return
