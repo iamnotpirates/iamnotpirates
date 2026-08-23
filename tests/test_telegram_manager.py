@@ -2,6 +2,7 @@ import os
 
 from src.telegram_manager import build_caption, parse_caption
 from src.telegram_manager import split_file, merge_files, cleanup_parts, PART_SIZE
+from src.telegram_manager import normalize_title, matches_query, backup_key, entry_backup_key
 
 
 def test_build_caption_contains_human_line_and_json_block():
@@ -77,3 +78,32 @@ def test_cleanup_parts_removes_files_and_tolerates_missing(tmp_path):
 
 def test_part_size_below_two_gb_limit():
     assert 0 < PART_SIZE < 2 * 1024 * 1024 * 1024
+
+
+def test_normalize_title_strips_case_and_symbols():
+    assert normalize_title("Judul: Film-Bagus! 2024") == "judulfilmbagus2024"
+
+
+def test_matches_query_substring_normalized():
+    assert matches_query("The Last of Us (2023)", "last of us")
+    assert matches_query("Avengers Endgame", "avengers")
+    assert not matches_query("Batman", "superman")
+
+
+def test_matches_query_empty_query_is_false():
+    assert not matches_query("Anything", "")
+    assert not matches_query("", "x")
+
+
+def test_backup_key_consistent_across_season_episode():
+    a = backup_key("Film X", "2024", None, None)
+    b = entry_backup_key({"title": "Film X", "year": "2024"})
+    assert a == b
+    ep_a = backup_key("Series Y", "2023", 2, 5)
+    ep_b = entry_backup_key({"title": "Series Y", "year": "2023", "season": 2, "episode": 5})
+    assert ep_a == ep_b
+    assert ep_a != a
+
+
+def test_entry_backup_key_handles_none_year():
+    assert entry_backup_key({"title": "Z"}) == backup_key("Z", None, None, None)

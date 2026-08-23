@@ -79,3 +79,32 @@ def cleanup_parts(part_paths: list) -> None:
                 os.remove(part)
         except OSError:
             pass
+
+
+def normalize_title(value: str) -> str:
+    return re.sub(r"[^a-z0-9]+", "", (value or "").lower())
+
+
+def matches_query(title: str, query: str) -> bool:
+    needle = normalize_title(query)
+    if not needle:
+        return False
+    return needle in normalize_title(title)
+
+
+def backup_key(title: str, year, season, episode) -> str:
+    return "|".join([
+        normalize_title(title),
+        str(year or ""),
+        str(season if season is not None else ""),
+        str(episode if episode is not None else ""),
+    ])
+
+
+def entry_backup_key(entry: dict) -> str:
+    return backup_key(
+        entry.get("title", ""),
+        entry.get("year"),
+        entry.get("season"),
+        entry.get("episode"),
+    )
