@@ -328,3 +328,58 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
         forwarded_to.append(destination["target"])
 
     return {"video_msg_ids": video_msg_ids, "sub_msg_ids": sub_msg_ids, "forwarded_to": forwarded_to}
+
+
+def build_restore_target(config: dict, item: dict) -> tuple:
+    from src.config_manager import get_download_dir
+    from src.downloader import format_tv_paths
+    title = item.get("title", "Unknown")
+    year = str(item.get("year") or "").strip()
+    if year.upper() == "N/A":
+        year = ""
+    if item.get("media_type") == "episode":
+        base_dir = get_download_dir(config, media_type="series")
+        season_dir, base_filename = format_tv_paths(
+            title, year, item.get("season") or 1, item.get("episode") or 1, base_dir
+        )
+        return season_dir, f"{base_filename}.mp4"
+    base_dir = get_download_dir(config, media_type="movie")
+    folder = f"{title} ({year})" if year else title
+    return os.path.join(base_dir, folder), f"{folder}.mp4"
+
+
+def restore_backup(client, item: dict, config: dict, progress_callback=None) -> str:
+    target_dir, filename = build_restore_target(config, item)
+    os.makedirs(target_dir, exist_ok=True)
+    os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
+    chat = item.get("chat", "me")
+
+    messages = client.get_messages(chat, ids=list(item["video_msg_ids"]))
+    part_files = []
+    for message in messages:
+        downloaded = client.download_media(
+            message, file=TMP_SPLIT_DIR, progress_callback=progress_callback
+        )
+        part_files.append(downloaded)
+
+    output_path = os.path.join(target_dir, filename)
+    merge_files(part_files, output_path)
+
+    expected_size = item.get("file_size", 0)
+    actual_size = os.path.getsize(output_path)
+    if actual_size != expected_size:
+        raise IOError(
+            f"Verifikasi ukuran gagal untuk '{filename}': "
+            f"diharapkan {expected_size}, didapat {actual_size}. "
+            f"Part sementara tetap disimpan di {TMP_SPLIT_DIR}."
+        )
+
+    cleanup_parts(part_files)
+
+    sub_ids = list(item.get("sub_msg_ids") or [])
+    if sub_ids:
+        sub_messages = client.get_messages(chat, ids=sub_ids)
+        for sub_message in sub_messages:
+            client.download_media(sub_message, file=target_dir)
+
+    return output_path

@@ -392,3 +392,92 @@ def test_auto_tmp_dir_created_and_removed(monkeypatch, tmp_path):
     assert len(seen) == 1
     assert seen[0].startswith("up_")
     assert os.listdir(str(auto_root)) == []
+
+
+import pytest
+
+from src.telegram_manager import build_restore_target, restore_backup
+
+
+RESTORE_CONFIG = {
+    "organize_mode": "separate",
+    "movies_dir": "/tmp-test/Movies",
+    "series_dir": "/tmp-test/Series",
+}
+
+MOVIE_ITEM = {
+    "title": "Film A", "year": "2024", "media_type": "movie",
+    "season": None, "episode": None, "file_size": 11, "part_count": 2,
+    "subtitles": ["Film A.id.srt"],
+    "video_msg_ids": [31, 32], "sub_msg_ids": [33], "chat": "me",
+}
+
+
+def test_build_restore_target_movie_uses_movies_dir():
+    target_dir, filename = build_restore_target(RESTORE_CONFIG, MOVIE_ITEM)
+    assert target_dir.replace("\\", "/").endswith("/tmp-test/Movies/Film A (2024)")
+    assert filename == "Film A (2024).mp4"
+
+
+def test_build_restore_target_episode_uses_series_paths():
+    item = dict(MOVIE_ITEM, media_type="episode", title="Series Z",
+                season=2, episode=5, year="2023")
+    target_dir, filename = build_restore_target(RESTORE_CONFIG, item)
+    assert "Series Z (2023)" in target_dir.replace("\\", "/")
+    assert "Season 02" in target_dir.replace("\\", "/")
+    assert filename == "Series Z - S02E05.mp4"
+
+
+class RestoreFakeClient:
+    def __init__(self, payloads_by_id):
+        self.payloads = payloads_by_id
+        self.downloaded = []
+
+    def get_messages(self, chat, ids):
+        wrapped = []
+        for msg_id in ids:
+            m = MagicMock()
+            m.id = msg_id
+            wrapped.append(m)
+        return wrapped
+
+    def download_media(self, message, file=None, progress_callback=None):
+        msg_id = message.id
+        out = os.path.join(file, f"{msg_id}.bin") if os.path.isdir(str(file)) else str(file)
+        os.makedirs(os.path.dirname(out), exist_ok=True)
+        with open(out, "wb") as fh:
+            fh.write(self.payloads[msg_id])
+        self.downloaded.append(out)
+        return out
+
+
+def test_restore_merges_parts_downloads_subs_and_verifies(tmp_path, monkeypatch):
+    import src.telegram_manager as tm
+    monkeypatch.setattr(tm, "TMP_SPLIT_DIR", str(tmp_path / "tmp"))
+    client = RestoreFakeClient({31: b"hello ", 32: b"world", 33: b"SRTDATA"})
+    config = {
+        "organize_mode": "separate",
+        "movies_dir": str(tmp_path / "Movies"),
+        "series_dir": str(tmp_path / "Series"),
+    }
+    out_path = restore_backup(client, MOVIE_ITEM, config)
+    assert os.path.basename(out_path) == "Film A (2024).mp4"
+    with open(out_path, "rb") as fh:
+        assert fh.read() == b"hello world"
+    restored_subs = [f for f in os.listdir(os.path.dirname(out_path)) if f.endswith(".bin")]
+    assert len(restored_subs) == 1
+    leftovers = [f for f in os.listdir(str(tmp_path / "tmp"))]
+    assert leftovers == []
+
+
+def test_restore_raises_ioerror_on_size_mismatch_keeps_parts(tmp_path, monkeypatch):
+    import src.telegram_manager as tm
+    monkeypatch.setattr(tm, "TMP_SPLIT_DIR", str(tmp_path / "tmp"))
+    client = RestoreFakeClient({31: b"short", 32: b"", 33: b""})
+    config = {
+        "organize_mode": "separate",
+        "movies_dir": str(tmp_path / "Movies"),
+        "series_dir": str(tmp_path / "Series"),
+    }
+    with pytest.raises(IOError):
+        restore_backup(client, dict(MOVIE_ITEM, video_msg_ids=[31]), config)
