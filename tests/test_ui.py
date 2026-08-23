@@ -251,6 +251,12 @@ def test_format_backup_table_shows_core_columns():
     assert "1" in text
 
 
+def test_format_backup_table_renders_season_episode():
+    item = dict(BACKUP_ITEM, title="Seri A", season=1, episode=2)
+    text = _render(format_backup_table([item]))
+    assert "S01E02" in text
+
+
 LOCAL_ENTRY = {
     "title": "Film A", "year": "2024", "media_type": "movie",
     "season": None, "episode": None,
@@ -275,5 +281,7 @@ def test_format_hybrid_results_tags_sources():
     text = _render(format_hybrid_table(rows))
     assert "IDLIX" in text and "TELEGRAM" in text
     assert "Film A" in text
+    assert "https://x/film-a" in text
+    assert "1.5 MB" in text
 
 
