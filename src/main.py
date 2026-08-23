@@ -1087,7 +1087,7 @@ def handle_telegram_search_restore(config: dict) -> None:
         return
     console.print(format_backup_table(filtered))
     raw = questionary.text(f"Pilih nomor untuk restore (1-{len(filtered)}, kosongkan untuk batal):").ask()
-    if not raw or not raw.strip().isdigit() or not (1 <= int(raw) <= len(filtered)):
+    if not raw or not raw.strip().isdecimal() or not (1 <= int(raw) <= len(filtered)):
         console.print("[yellow]Restore dibatalkan.[/yellow]")
         return
     chosen = filtered[int(raw) - 1]

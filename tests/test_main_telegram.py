@@ -103,3 +103,21 @@ def test_handle_telegram_search_restores_selected(
     mock_restore.assert_called_once()
     called_item = mock_restore.call_args[0][1]
     assert called_item["title"] == "Film A"
+
+
+@patch("src.main.restore_backup")
+@patch("src.main.questionary.text")
+@patch("src.main.scan_with_spinner", return_value=SCAN_ITEMS)
+@patch("src.main.require_telegram_ready", return_value=True)
+def test_handle_telegram_search_superscript_pick_cancels_gracefully(
+    mock_ready, mock_scan, mock_text, mock_restore, capsys
+):
+    from src.main import handle_telegram_search_restore
+
+    mock_text.return_value = MagicMock(ask=MagicMock(side_effect=[
+        "film a",  # query pencarian
+        "²",       # nomor unicode-superscript: harus batal, bukan crash
+    ]))
+    handle_telegram_search_restore({})
+    assert "Restore dibatalkan" in capsys.readouterr().out
+    mock_restore.assert_not_called()
