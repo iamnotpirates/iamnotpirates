@@ -261,6 +261,7 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                         "video_error": None,
                         "subtitles": sub_results
                     })
+                    maybe_auto_backup(video_path, config, ep_title, year, "episode", season=season_num, episode=ep["episode_num"])
                 else:
                     print_error(f"Gagal mendownload video untuk Episode {ep['episode_num']}")
                     add_entry(
@@ -463,6 +464,7 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                         summary["sub_failed"] += 1
                         sub_results.append({"lang": l_code, "status": "FAILED", "error": "Download failed"})
 
+        maybe_auto_backup(video_path, config, clean_title, year, "movie")
         summary["items"].append({
             "title": clean_title,
             "video_status": "SUCCESS",
@@ -1184,6 +1186,40 @@ def _rich_progress(total: int, description: str):
         progress.update(task_id, completed=current)
 
     return progress, callback
+
+
+def maybe_auto_backup(video_path: str, config: dict, title: str, year: str,
+                      media_type: str, season=None, episode=None) -> None:
+    if config.get("tg_auto_backup") != "1":
+        return
+    if not is_configured(config) or not is_logged_in():
+        return
+    try:
+        destinations = get_destinations(config)
+        if not destinations:
+            return
+        video_dir = os.path.dirname(video_path)
+        stem = os.path.splitext(os.path.basename(video_path))[0]
+        sub_paths = [
+            os.path.join(video_dir, name)
+            for name in sorted(os.listdir(video_dir))
+            if name.lower().endswith(".srt") and os.path.splitext(name)[0].startswith(stem)
+        ]
+        meta = {
+            "title": title, "year": year, "media_type": media_type,
+            "season": season, "episode": episode, "subtitles": [],
+        }
+        size = os.path.getsize(video_path)
+        progress, cb = _rich_progress(size, f"☁️ {title}")
+        client = create_client(config)
+        try:
+            with progress:
+                upload_backup(client, video_path, sub_paths, meta, destinations, progress_callback=cb)
+        finally:
+            client.disconnect()
+        print_success(f"Auto-backup Telegram selesai: {title}")
+    except Exception as exc:
+        console.print(f"[yellow]⚠️ Auto-backup gagal untuk {title}: {exc}[/yellow]")
 
 
 def handle_telegram_manual_backup(config: dict) -> None:

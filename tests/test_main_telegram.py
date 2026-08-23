@@ -244,3 +244,45 @@ def test_handle_search_survives_telegram_failure(
     mock_search.return_value = [{"title": "Any Film", "type": "Movie", "url": "https://x/any"}]
     main_mod.handle_search("https://z2.idlixku.com/", {"active_url": "u"})
     mock_proc.assert_called_once()
+
+
+def test_auto_backup_disabled_does_nothing(tmp_path):
+    video = tmp_path / "V.mp4"
+    video.write_bytes(b"x" * 3)
+    calls = []
+    with patch.object(main_mod, "upload_backup", lambda *a, **k: calls.append(a)):
+        main_mod.maybe_auto_backup(str(video), {"tg_auto_backup": "0"}, "V", "2024", "movie")
+    assert calls == []
+
+
+def test_auto_backup_uploads_with_siblings_and_never_raises(tmp_path):
+    video = tmp_path / "My Film.mp4"
+    video.write_bytes(b"x" * 3)
+    (tmp_path / "My Film.id.srt").write_text("srt")
+    (tmp_path / "Other.id.srt").write_text("nope")
+    captured = {}
+
+    def fake_upload(client, path, subs, meta, dests, progress_callback=None):
+        captured.update(path=path, subs=subs, meta=meta)
+        return {"video_msg_ids": [1], "sub_msg_ids": [], "forwarded_to": []}
+
+    config = {"tg_auto_backup": "1"}
+    with patch.object(main_mod, "is_configured", return_value=True), \
+         patch.object(main_mod, "is_logged_in", return_value=True), \
+         patch.object(main_mod, "get_destinations", return_value=[{"type": "saved", "target": "me"}]), \
+         patch.object(main_mod, "create_client", lambda cfg: MagicMock()), \
+         patch.object(main_mod, "upload_backup", fake_upload):
+        main_mod.maybe_auto_backup(str(video), config, "My Film", "2024", "movie")
+    assert captured["subs"] == [str(tmp_path / "My Film.id.srt")]
+    assert captured["meta"]["title"] == "My Film"
+
+
+def test_auto_backup_swallows_errors(tmp_path):
+    video = tmp_path / "Boom.mp4"
+    video.write_bytes(b"x")
+    with patch.object(main_mod, "is_configured", return_value=True), \
+         patch.object(main_mod, "is_logged_in", return_value=True), \
+         patch.object(main_mod, "get_destinations", return_value=[{"type": "saved", "target": "me"}]), \
+         patch.object(main_mod, "create_client", lambda cfg: MagicMock()), \
+         patch.object(main_mod, "upload_backup", side_effect=RuntimeError("boom")):
+        main_mod.maybe_auto_backup(str(video), {"tg_auto_backup": "1"}, "Boom", "2024", "movie")
