@@ -4,7 +4,7 @@ import os
 import re
 import shutil
 import sys
-from typing import Callable, Optional
+from typing import Optional
 
 TELEGRAM_DIR = os.path.join(os.path.expanduser("~"), ".iamnotpirates", "telegram")
 SESSION_PATH = os.path.join(TELEGRAM_DIR, "session")
