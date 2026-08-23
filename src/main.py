@@ -1059,7 +1059,7 @@ def _confirm_or_proceed(message: str) -> bool:
     try:
         return bool(questionary.confirm(message).ask())
     except Exception:
-        return True
+        return False
 
 
 def _pause() -> None:

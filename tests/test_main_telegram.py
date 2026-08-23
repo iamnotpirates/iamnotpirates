@@ -82,13 +82,15 @@ def test_handle_telegram_lists_all_backups(mock_ready, mock_scan, mock_press, ca
     mock_scan.assert_called_once()
 
 
+@patch("src.main.questionary.press_any_key_to_continue")
+@patch("src.main.questionary.confirm")
 @patch("src.main.restore_backup", return_value="C:/out/Film A.mp4")
 @patch("src.main.create_client")
 @patch("src.main.questionary.text")
 @patch("src.main.scan_with_spinner", return_value=SCAN_ITEMS)
 @patch("src.main.require_telegram_ready", return_value=True)
 def test_handle_telegram_search_restores_selected(
-    mock_ready, mock_scan, mock_text, mock_client, mock_restore
+    mock_ready, mock_scan, mock_text, mock_client, mock_restore, mock_confirm, mock_press
 ):
     from src.main import handle_telegram_search_restore
 
@@ -96,6 +98,7 @@ def test_handle_telegram_search_restores_selected(
         "film a",  # query pencarian
         "1",       # pilih nomor item hasil filter
     ]))
+    mock_confirm.return_value = MagicMock(ask=MagicMock(return_value=True))
     handle_telegram_search_restore({})
     mock_restore.assert_called_once()
     called_item = mock_restore.call_args[0][1]
