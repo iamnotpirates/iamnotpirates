@@ -169,8 +169,8 @@ Once launched, you will be presented with an interactive CLI menu:
 This project is built using **Test-Driven Development (TDD)** with complete test coverage.  
 *(Proyek ini dibangun menggunakan **Test-Driven Development (TDD)** dengan cakupan pengujian lengkap.)*
 
-To run the full test suite (100+ unit & integration tests):  
-*(Untuk menjalankan seluruh test suite — 100+ unit & integration tests:)*
+To run the full test suite (180 unit & integration tests):  
+*(Untuk menjalankan seluruh test suite — 180 unit & integration tests:)*
 ```bash
 uv run pytest -v
 ```
@@ -207,8 +207,9 @@ iamnotpirates/
 │   ├── db_manager.py         # SQLite database core manager (Manager inti database SQLite)
 │   ├── config_manager.py     # App settings & target URLs manager (Manajer pengaturan & target URL)
 │   ├── download_log.py       # Download history log & retry tracker (Log riwayat download & pelacak retry)
+│   ├── telegram_manager.py   # Telegram MTProto backup, split/merge & restore manager (Manager backup, split/merge & restore Telegram)
 │   └── ui.py                 # Rich console UI, tables & spinners (UI rich console, tabel & spinner)
-├── tests/                    # 102 Pytest unit & integration test suite
+├── tests/                    # 180 Pytest unit & integration test suite
 ├── scripts/                  # Release build automation scripts (Script otomatisasi build release)
 │   └── build_release.py      # Automated PyInstaller executable builder
 ├── docs/                     # Architecture documentation, SDD specs & plans (Dokumentasi arsitektur, spec & plan)
@@ -216,6 +217,15 @@ iamnotpirates/
 ├── pyproject.toml            # Project dependencies & pytest configuration (Dependensi proyek & konfigurasi pytest)
 └── README.md                 # Dual-language project documentation (Dokumentasi proyek dua bahasa)
 ```
+
+---
+
+## ⚠️ Known Limitations (*Keterbatasan*)
+
+- **Foreign messages between split parts** (*Pesan asing di antara dua part split*): A foreign message sent between two parts of a split upload can break scan grouping; restore-time size verification acts as the safety net against corrupt merges.  
+  *(Pesan asing yang dikirim di antara dua part split dapat memutus pengelompokan saat scan; verifikasi ukuran saat restore berfungsi sebagai jaring pengaman agar file rusak tidak tersimpan.)*
+- **Duplicate rows per destination are intentional** (*Baris duplikat per tujuan bersifat disengaja*): Items backed up to multiple destinations appear once per destination so restore can fall back to the other copy if one fails.  
+  *(Item yang dibackup ke beberapa tujuan muncul satu baris per tujuan sehingga restore bisa fallback ke salinan lain jika salah satu gagal.)*
 
 ---
 
