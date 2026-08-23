@@ -169,3 +169,86 @@ def test_login_flow_rejects_non_numeric_api_id(monkeypatch):
     monkeypatch.setattr(tm, "save_config_key", lambda key, value: saved.setdefault(key, value))
     assert tm.login_flow(MagicMock(), {}) is False
     assert saved == {}
+
+
+from src.telegram_manager import scan_backups, build_caption
+
+
+class FakeDoc:
+    def __init__(self, attributes):
+        self.attributes = attributes
+
+
+class FakeAttr:
+    def __init__(self, file_name):
+        self.file_name = file_name
+
+
+class FakeMsg:
+    def __init__(self, msg_id, caption=None, file_name=None):
+        self.id = msg_id
+        self.message = caption
+        self.document = FakeDoc([FakeAttr(file_name)]) if file_name else FakeDoc([])
+
+
+VIDEO_META = {"kind": "video", "title": "Film A", "year": "2024", "media_type": "movie",
+              "season": None, "episode": None, "file_size": 300, "part_count": 2,
+              "subtitles": ["Film A.id.srt"]}
+SUB_META = {"kind": "subtitle", "filename": "Film A.id.srt", "parent_title": "Film A"}
+
+
+class FakeClient:
+    def __init__(self, messages_by_target):
+        self._messages_by_target = messages_by_target
+        self.iter_calls = []
+
+    def iter_messages(self, target, reverse=None, limit=None):
+        self.iter_calls.append((target, reverse, limit))
+        messages = self._messages_by_target.get(target, [])
+        return iter(list(reversed(messages)) if reverse else messages)
+
+
+DESTS = [{"type": "saved", "target": "me"}]
+CHANNEL_MSGS_VIDEO_META = dict(VIDEO_META)
+
+
+def test_scan_groups_parts_subs_and_skips_foreign():
+    messages = [
+        FakeMsg(1, caption=build_caption(SUB_META), file_name="Film A.id.srt"),
+        FakeMsg(2),  # part 2 tanpa caption app
+        FakeMsg(3, caption=build_caption(VIDEO_META), file_name="Film A.part001"),
+        FakeMsg(99, caption="caption orang lain"),  # dilewati
+    ]
+    client = FakeClient({"me": messages})
+    items = scan_backups(client, DESTS)
+    assert client.iter_calls == [("me", True, None)]
+    assert len(items) == 1
+    item = items[0]
+    assert item["title"] == "Film A"
+    assert item["video_msg_ids"] == [3, 2]
+    assert item["sub_msg_ids"] == [1]
+    assert item["subtitles"] == ["Film A.id.srt"]
+    assert item["chat"] == "me"
+
+
+def test_scan_all_destinations_no_dedupe_between_targets():
+    ch_meta = dict(VIDEO_META)
+    msgs_me = [FakeMsg(3, caption=build_caption(ch_meta), file_name="p1")]
+    msgs_channel = [FakeMsg(55, caption=build_caption(ch_meta), file_name="p1")]
+    client = FakeClient({"me": msgs_me, "@c": msgs_channel})
+    items = scan_backups(client, [
+        {"type": "saved", "target": "me"},
+        {"type": "channel", "target": "@c"},
+    ])
+    chats = sorted(it["chat"] for it in items)
+    assert chats == ["@c", "me"]
+    assert len(items) == 2
+
+
+def test_scan_returns_empty_without_destination():
+    assert scan_backups(FakeClient({}), []) == []
+
+
+def test_scan_subtitle_before_any_video_is_ignored():
+    messages = [FakeMsg(1, caption=build_caption(SUB_META), file_name="x.srt")]
+    assert scan_backups(FakeClient({"me": messages}), DESTS) == []

@@ -203,3 +203,54 @@ def login_flow(console, config: dict) -> bool:
         return True
     console.print("[bold red]Login gagal / tidak selesai.[/bold red]")
     return False
+
+
+def _document_name(msg) -> str:
+    doc = getattr(msg, "document", None)
+    if doc is None:
+        return ""
+    for attr in getattr(doc, "attributes", []) or []:
+        name = getattr(attr, "file_name", None)
+        if name:
+            return name
+    return ""
+
+
+def scan_backups(client, destinations: list) -> list:
+    items = []
+    for destination in destinations:
+        target = destination["target"]
+        current = None
+        for msg in client.iter_messages(target, reverse=True, limit=None):
+            if getattr(msg, "document", None) is None:
+                continue
+            meta = parse_caption(getattr(msg, "message", None))
+            if meta and meta.get("kind") == "video":
+                current = {
+                    "title": meta.get("title", ""),
+                    "year": meta.get("year", ""),
+                    "media_type": meta.get("media_type", "movie"),
+                    "season": meta.get("season"),
+                    "episode": meta.get("episode"),
+                    "file_size": meta.get("file_size", 0),
+                    "part_count": meta.get("part_count", 1),
+                    "subtitles": list(meta.get("subtitles", [])),
+                    "video_msg_ids": [msg.id],
+                    "sub_msg_ids": [],
+                    "chat": target,
+                }
+                items.append(current)
+                continue
+            if meta and meta.get("kind") == "subtitle":
+                parent_title = meta.get("parent_title", "")
+                for item in reversed(items):
+                    if item["title"] == parent_title and item["chat"] == target:
+                        item["sub_msg_ids"].append(msg.id)
+                        name = _document_name(msg)
+                        if name and name not in item["subtitles"]:
+                            item["subtitles"].append(name)
+                        break
+                continue
+            if current and len(current["video_msg_ids"]) < current.get("part_count", 1):
+                current["video_msg_ids"].append(msg.id)
+    return items
