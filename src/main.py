@@ -954,25 +954,26 @@ def handle_search(active_url: str, config: dict) -> None:
             idlix_items = search_content(active_url, clean_query)
 
         tg_items = []
-        telegram_failed = False
+        telegram_skip_reason = None
         try:
             tg_items = [
                 it for it in scan_with_spinner(config)
                 if matches_query(it.get("title", ""), clean_query)
             ]
-        except Exception:
-            telegram_failed = True
+        except Exception as exc:
+            telegram_skip_reason = type(exc).__name__
 
         for item in tg_items:
             item["__source__"] = "telegram"
+
+        if telegram_skip_reason:
+            console.print(f"[dim]ℹ️ Pencarian backup Telegram dilewati ({telegram_skip_reason}).[/dim]")
 
         rows = format_hybrid_results(idlix_items, tg_items)
         if not rows:
             console.print(f"[yellow]Tidak ada hasil ditemukan untuk \"{clean_query}\".[/yellow]")
             continue
 
-        if telegram_failed:
-            console.print("[dim]ℹ️ Pencarian backup Telegram dilewati (tidak terhubung).[/dim]")
         console.print(format_hybrid_table(rows))
 
         raw = questionary.text(
