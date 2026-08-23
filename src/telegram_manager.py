@@ -40,3 +40,42 @@ def parse_caption(text: Optional[str]) -> Optional[dict]:
     if not isinstance(data, dict) or data.get("app") != APP_MARKER:
         return None
     return data
+
+
+def split_file(path: str, part_size: int = PART_SIZE, tmp_dir: Optional[str] = None) -> list:
+    if tmp_dir is None:
+        tmp_dir = TMP_SPLIT_DIR
+    os.makedirs(tmp_dir, exist_ok=True)
+    base = os.path.splitext(os.path.basename(path))[0]
+    parts = []
+    index = 1
+    with open(path, "rb") as src:
+        while True:
+            chunk = src.read(part_size)
+            if not chunk:
+                break
+            part_path = os.path.join(tmp_dir, f"{base}.part{index:03d}")
+            with open(part_path, "wb") as dst:
+                dst.write(chunk)
+            parts.append(part_path)
+            index += 1
+    return parts
+
+
+def merge_files(part_paths: list, output_path: str) -> None:
+    parent = os.path.dirname(output_path)
+    if parent:
+        os.makedirs(parent, exist_ok=True)
+    with open(output_path, "wb") as dst:
+        for part in part_paths:
+            with open(part, "rb") as src:
+                shutil.copyfileobj(src, dst)
+
+
+def cleanup_parts(part_paths: list) -> None:
+    for part in part_paths:
+        try:
+            if os.path.exists(part):
+                os.remove(part)
+        except OSError:
+            pass

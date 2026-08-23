@@ -196,3 +196,12 @@ def print_startup_dependency_notice(console: Console | None = None) -> None:
     console.print(panel)
 
 
+def human_size(num_bytes: float) -> str:
+    size = float(num_bytes)
+    for unit in ("B", "KB", "MB", "GB"):
+        if size < 1024:
+            return f"{size:.1f} {unit}"
+        size /= 1024
+    return f"{size:.1f} TB"
+
+

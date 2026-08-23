@@ -1,4 +1,7 @@
+import os
+
 from src.telegram_manager import build_caption, parse_caption
+from src.telegram_manager import split_file, merge_files, cleanup_parts, PART_SIZE
 
 
 def test_build_caption_contains_human_line_and_json_block():
@@ -32,3 +35,45 @@ def test_parse_caption_returns_none_for_foreign_or_broken_text():
     assert parse_caption(None) is None
     assert parse_caption("```json\n{broken\n```") is None
     assert parse_caption('```json\n{"app": "other"}\n```') is None
+
+
+def test_split_and_merge_small_file_roundtrip(tmp_path):
+    src = tmp_path / "movie.mp4"
+    payload = os.urandom(5000)
+    src.write_bytes(payload)
+
+    parts = split_file(str(src), part_size=2000, tmp_dir=str(tmp_path / "parts"))
+    assert len(parts) == 3
+    assert all(os.path.exists(p) for p in parts)
+
+    out = tmp_path / "merged.mp4"
+    merge_files(parts, str(out))
+    assert out.read_bytes() == payload
+
+
+def test_split_exact_multiple_makes_no_empty_part(tmp_path):
+    src = tmp_path / "f.bin"
+    src.write_bytes(b"x" * 4000)
+    parts = split_file(str(src), part_size=2000, tmp_dir=str(tmp_path / "p2"))
+    assert len(parts) == 2
+
+
+def test_merge_creates_missing_parent_dirs(tmp_path):
+    p1 = tmp_path / "a.part1"
+    p1.write_bytes(b"hello ")
+    p2 = tmp_path / "a.part2"
+    p2.write_bytes(b"world")
+    out = tmp_path / "deep" / "nested" / "out.txt"
+    merge_files([str(p1), str(p2)], str(out))
+    assert out.read_bytes() == b"hello world"
+
+
+def test_cleanup_parts_removes_files_and_tolerates_missing(tmp_path):
+    p1 = tmp_path / "x.part1"
+    p1.write_bytes(b"a")
+    cleanup_parts([str(p1), str(tmp_path / "ghost.part2")])
+    assert not p1.exists()
+
+
+def test_part_size_below_two_gb_limit():
+    assert 0 < PART_SIZE < 2 * 1024 * 1024 * 1024

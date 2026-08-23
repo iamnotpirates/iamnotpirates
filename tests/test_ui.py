@@ -10,6 +10,15 @@ from src.ui import (
     print_header,
     print_success,
 )
+from src.ui import human_size
+
+
+def test_human_size_units():
+    assert human_size(500) == "500.0 B"
+    assert human_size(2048) == "2.0 KB"
+    assert human_size(5 * 1024 * 1024) == "5.0 MB"
+    assert human_size(3 * 1024 * 1024 * 1024) == "3.0 GB"
+    assert human_size(2 * 1024 * 1024 * 1024 * 1024) == "2.0 TB"
 
 
 def test_format_featured_table_columns_and_rows():
