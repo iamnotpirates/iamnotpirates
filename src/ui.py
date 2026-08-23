@@ -205,3 +205,83 @@ def human_size(num_bytes: float) -> str:
     return f"{size:.1f} TB"
 
 
+def format_backup_table(items: list) -> Table:
+    table = Table(title="[bold cyan]📚 Daftar Backup Telegram[/bold cyan]",
+                  header_style="bold magenta", show_header=True, expand=True)
+    table.add_column("No", justify="right", style="cyan")
+    table.add_column("Judul", style="bold white")
+    table.add_column("Tahun", justify="center", style="yellow")
+    table.add_column("Tipe", justify="center", style="green")
+    table.add_column("S/E", justify="center")
+    table.add_column("Ukuran", justify="right", style="cyan")
+    table.add_column("Part", justify="center")
+    table.add_column("Sub", justify="center")
+    for idx, item in enumerate(items, start=1):
+        se = "-"
+        if item.get("season") is not None and item.get("episode") is not None:
+            se = f"S{item['season']:02d}E{item['episode']:02d}"
+        table.add_row(
+            str(idx), item.get("title", ""), str(item.get("year", "") or "-"),
+            item.get("media_type", ""), se,
+            human_size(item.get("file_size", 0)),
+            str(item.get("part_count", 1)), str(len(item.get("subtitles", []))),
+        )
+    return table
+
+
+def format_local_delete_table(entries: list) -> Table:
+    table = Table(title="[bold cyan]🗑️ File Lokal[/bold cyan]",
+                  header_style="bold magenta", show_header=True, expand=True)
+    table.add_column("No", justify="right", style="cyan")
+    table.add_column("Judul", style="bold white")
+    table.add_column("Tipe", justify="center")
+    table.add_column("Ukuran", justify="right", style="cyan")
+    table.add_column("Status", justify="center")
+    table.add_column("Path", style="dim")
+    for idx, entry in enumerate(entries, start=1):
+        if entry.get("backed"):
+            status = "[green]✅ Aman di Telegram[/green]"
+        else:
+            status = "[red]⚠️ BELUM DIBACKUP[/red]"
+        table.add_row(
+            str(idx), entry.get("title", ""), entry.get("media_type", ""),
+            human_size(entry.get("file_size", 0)), status,
+            entry.get("output_path", ""),
+        )
+    return table
+
+
+def format_hybrid_results(idlix_items: list, tg_items: list) -> list:
+    rows = []
+    for item in idlix_items or []:
+        rows.append(dict(item, __source__="idlix"))
+    for item in tg_items or []:
+        rows.append(dict(item, __source__="telegram"))
+    return rows
+
+
+def format_hybrid_table(rows: list) -> Table:
+    table = Table(title="[bold cyan]🔍 Hasil Pencarian[/bold cyan]",
+                  header_style="bold magenta", show_header=True, expand=True)
+    table.add_column("No", justify="right", style="cyan")
+    table.add_column("Sumber", justify="center")
+    table.add_column("Judul", style="bold white")
+    table.add_column("Tahun", justify="center", style="yellow")
+    table.add_column("Tipe", justify="center")
+    table.add_column("Info", style="dim")
+    for idx, row in enumerate(rows, start=1):
+        if row.get("__source__") == "telegram":
+            source = "[magenta]📡 TELEGRAM[/magenta]"
+            info = human_size(row.get("file_size", 0))
+            media_type = row.get("media_type", "")
+        else:
+            source = "[blue]🌐 IDLIX[/blue]"
+            info = row.get("url", "")
+            media_type = row.get("type", "")
+        table.add_row(
+            str(idx), source, row.get("title", ""),
+            str(row.get("year", "") or "-"), media_type, info,
+        )
+    return table
+
+

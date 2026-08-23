@@ -3,8 +3,12 @@ from rich.console import Console
 from rich.table import Table
 
 from src.ui import (
+    format_backup_table,
     format_download_summary_table,
     format_featured_table,
+    format_hybrid_results,
+    format_hybrid_table,
+    format_local_delete_table,
     print_download_summary,
     print_error,
     print_header,
@@ -223,5 +227,53 @@ def test_print_startup_dependency_notice():
 
     assert "System Dependency Check" in output
     assert "sekali" in output.lower()
+
+
+def _render(table) -> str:
+    console = Console(width=200)
+    with console.capture() as capture:
+        console.print(table)
+    return capture.get()
+
+
+BACKUP_ITEM = {
+    "title": "Film A", "year": "2024", "media_type": "movie",
+    "season": None, "episode": None, "file_size": int(1.5 * 1024 * 1024),
+    "part_count": 1, "subtitles": ["a.srt"],
+}
+
+
+def test_format_backup_table_shows_core_columns():
+    text = _render(format_backup_table([BACKUP_ITEM]))
+    assert "Film A" in text
+    assert "2024" in text
+    assert "1.5 MB" in text
+    assert "1" in text
+
+
+LOCAL_ENTRY = {
+    "title": "Film A", "year": "2024", "media_type": "movie",
+    "season": None, "episode": None,
+    "output_path": "C:/x/Film A.mp4", "file_size": 1500000, "backed": True,
+}
+LOCAL_ENTRY_UNSAFE = dict(LOCAL_ENTRY, backed=False, output_path="C:/y/B.mp4", title="Film B")
+
+
+def test_format_local_delete_table_status_markers():
+    text = _render(format_local_delete_table([LOCAL_ENTRY, LOCAL_ENTRY_UNSAFE]))
+    assert "Aman di Telegram" in text
+    assert "BELUM DIBACKUP" in text
+    assert "Film B" in text
+
+
+def test_format_hybrid_results_tags_sources():
+    idlix = [{"title": "Film A", "url": "https://x/film-a", "type": "Movie"}]
+    tg = [dict(BACKUP_ITEM)]
+    rows = format_hybrid_results(idlix, tg)
+    sources = [r["__source__"] for r in rows]
+    assert sources == ["idlix", "telegram"]
+    text = _render(format_hybrid_table(rows))
+    assert "IDLIX" in text and "TELEGRAM" in text
+    assert "Film A" in text
 
 
