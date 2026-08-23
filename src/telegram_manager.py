@@ -3,8 +3,11 @@ import math
 import os
 import re
 import shutil
+import subprocess
 import sys
 from typing import Optional
+
+from src.db_manager import save_config_key
 
 TELEGRAM_DIR = os.path.join(os.path.expanduser("~"), ".iamnotpirates", "telegram")
 SESSION_PATH = os.path.join(TELEGRAM_DIR, "session")
@@ -108,3 +111,92 @@ def entry_backup_key(entry: dict) -> str:
         entry.get("season"),
         entry.get("episode"),
     )
+
+
+def is_configured(config: dict) -> bool:
+    return bool(config.get("tg_api_id")) and bool(config.get("tg_api_hash"))
+
+
+def is_logged_in() -> bool:
+    return os.path.exists(SESSION_PATH + ".session")
+
+
+def get_destinations(config: dict) -> list:
+    raw = config.get("tg_destinations") or '["saved"]'
+    try:
+        names = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        names = ["saved"]
+    if not isinstance(names, list) or not names:
+        names = ["saved"]
+    destinations = []
+    for name in names:
+        if name == "saved":
+            destinations.append({"type": "saved", "target": "me"})
+        elif name == "channel":
+            channel_id = (config.get("tg_channel_id") or "").strip()
+            if channel_id:
+                destinations.append({"type": "channel", "target": channel_id})
+    return destinations
+
+
+def ensure_telethon(console) -> bool:
+    try:
+        import telethon
+        return True
+    except ImportError:
+        console.print("[yellow]Library 'telethon' belum terinstall.[/yellow]")
+        import questionary
+        answer = questionary.confirm("Install library telethon sekarang?").ask()
+        if answer:
+            subprocess.run([sys.executable, "-m", "pip", "install", "telethon"], check=False)
+            try:
+                import telethon
+                return True
+            except ImportError:
+                pass
+        console.print("[red]Telethon dibutuhkan untuk fitur ini.[/red]")
+        return False
+
+
+def create_client(config: dict):
+    from telethon import TelegramClient
+    return TelegramClient(
+        SESSION_PATH,
+        int(config["tg_api_id"]),
+        config["tg_api_hash"],
+    )
+
+
+def login_flow(console, config: dict) -> bool:
+    import questionary
+    if not is_configured(config):
+        console.print("[bold cyan]Panduan sekali saja:[/bold cyan] buka https://my.telegram.org "
+                      "-> API development tools -> buat aplikasi -> salin api_id & api_hash.")
+        api_id = questionary.text("Masukkan API ID:").ask()
+        api_hash = questionary.text("Masukkan API Hash:").ask()
+        if not api_id or not api_hash:
+            console.print("[red]API ID/Hash wajib diisi.[/red]")
+            return False
+        api_id = api_id.strip()
+        api_hash = api_hash.strip()
+        save_config_key("tg_api_id", api_id)
+        save_config_key("tg_api_hash", api_hash)
+        config["tg_api_id"] = api_id
+        config["tg_api_hash"] = api_hash
+
+    phone = questionary.text("Nomor HP Telegram (contoh: +6281234567890):").ask()
+    if not phone:
+        return False
+    os.makedirs(TELEGRAM_DIR, exist_ok=True)
+    client = create_client(config)
+    try:
+        client.start(phone=lambda: phone)
+        authorized = client.is_user_authorized()
+    finally:
+        client.disconnect()
+    if authorized:
+        console.print("[bold green]✓ Login Telegram berhasil.[/bold green]")
+        return True
+    console.print("[bold red]Login gagal / tidak selesai.[/bold red]")
+    return False

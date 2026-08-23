@@ -1,5 +1,11 @@
 import os
+import sys
+from unittest.mock import MagicMock, patch
 
+from src.telegram_manager import (
+    is_configured, is_logged_in, get_destinations,
+    ensure_telethon, create_client,
+)
 from src.telegram_manager import build_caption, parse_caption
 from src.telegram_manager import split_file, merge_files, cleanup_parts, PART_SIZE
 from src.telegram_manager import normalize_title, matches_query, backup_key, entry_backup_key
@@ -107,3 +113,46 @@ def test_backup_key_consistent_across_season_episode():
 
 def test_entry_backup_key_handles_none_year():
     assert entry_backup_key({"title": "Z"}) == backup_key("Z", None, None, None)
+
+
+def test_is_configured_requires_both_keys():
+    assert is_configured({"tg_api_id": "1", "tg_api_hash": "h"})
+    assert not is_configured({"tg_api_id": "", "tg_api_hash": "h"})
+    assert not is_configured({})
+
+
+def test_is_logged_in_checks_session_file(monkeypatch, tmp_path):
+    import src.telegram_manager as tm
+    monkeypatch.setattr(tm, "SESSION_PATH", str(tmp_path / "session"))
+    assert not tm.is_logged_in()
+    (tmp_path / "session.session").write_text("x")
+    assert tm.is_logged_in()
+
+
+def test_get_destinations_saved_only_default():
+    dests = get_destinations({"tg_destinations": '["saved"]'})
+    assert dests == [{"type": "saved", "target": "me"}]
+
+
+def test_get_destinations_channel_requires_channel_id():
+    assert get_destinations({
+        "tg_destinations": '["saved","channel"]', "tg_channel_id": "@mychan"
+    }) == [
+        {"type": "saved", "target": "me"},
+        {"type": "channel", "target": "@mychan"},
+    ]
+    assert get_destinations({"tg_destinations": '["channel"]', "tg_channel_id": ""}) == []
+    assert get_destinations({"tg_destinations": "bukan-json"}) == [{"type": "saved", "target": "me"}]
+
+
+def test_ensure_telethon_true_when_importable():
+    assert ensure_telethon(MagicMock())
+
+
+def test_create_client_passes_credentials(monkeypatch):
+    import src.telegram_manager as tm
+    fake_ctor = MagicMock()
+    monkeypatch.setitem(sys.modules, "telethon", MagicMock(TelegramClient=fake_ctor))
+    client = create_client({"tg_api_id": "123", "tg_api_hash": "hash"})
+    fake_ctor.assert_called_once_with(tm.SESSION_PATH, 123, "hash")
+    assert client is fake_ctor.return_value
