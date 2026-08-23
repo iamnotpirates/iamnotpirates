@@ -1088,7 +1088,7 @@ def handle_telegram_settings(config: dict) -> None:
             return
         if action == "🔑 Isi Ulang API ID / Hash":
             api_id = questionary.text("API ID:", default=fresh.get("tg_api_id", "")).ask()
-            api_hash = questionary.text("API Hash:", default=fresh.get("tg_api_hash", "")).ask()
+            api_hash = questionary.text("API Hash:", password=True).ask()
             if api_id and api_hash:
                 if not api_id.strip().isdigit():
                     console.print("[red]API ID harus berupa angka.[/red]")
