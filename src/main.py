@@ -1192,9 +1192,9 @@ def maybe_auto_backup(video_path: str, config: dict, title: str, year: str,
                       media_type: str, season=None, episode=None) -> None:
     if config.get("tg_auto_backup") != "1":
         return
-    if not is_configured(config) or not is_logged_in():
-        return
     try:
+        if not is_configured(config) or not is_logged_in():
+            return
         destinations = get_destinations(config)
         if not destinations:
             return
