@@ -256,7 +256,7 @@ def test_main_exit(mock_load, mock_header, mock_select, mock_ensure):
         ],
     }
     mock_select_obj = MagicMock()
-    mock_select_obj.ask.return_value = "9. ❌ Exit / Keluar"
+    mock_select_obj.ask.return_value = "10. ❌ Exit / Keluar"
     mock_select.return_value = mock_select_obj
 
     with pytest.raises(SystemExit) as excinfo:

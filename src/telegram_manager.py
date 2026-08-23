@@ -122,6 +122,16 @@ def is_logged_in() -> bool:
     return os.path.exists(SESSION_PATH + ".session")
 
 
+def logout_session() -> None:
+    for suffix in ("", ".session", ".session-journal"):
+        path = SESSION_PATH + suffix
+        try:
+            if os.path.exists(path):
+                os.remove(path)
+        except OSError:
+            pass
+
+
 def get_destinations(config: dict) -> list:
     raw = config.get("tg_destinations") or '["saved"]'
     try:

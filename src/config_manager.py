@@ -41,6 +41,12 @@ def save_config(config: dict, config_path: str = CONFIG_FILE, db_path: str | Non
             db_manager.save_config_key(k, str(v), db_path=target_db)
 
 
+def save_config_key(key: str, value: str, config_path: str = CONFIG_FILE, db_path: str | None = None) -> None:
+    """Save or update a single configuration key-value pair."""
+    target_db = db_path if db_path else (config_path if config_path != CONFIG_FILE else None)
+    db_manager.save_config_key(key, str(value), db_path=target_db)
+
+
 def add_target_url(url: str, name: str = "", config_path: str = CONFIG_FILE, db_path: str | None = None) -> dict:
     """Add a target URL to configuration if not already present."""
     target_db = db_path if db_path else (config_path if config_path != CONFIG_FILE else None)

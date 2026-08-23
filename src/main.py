@@ -1,19 +1,28 @@
 import sys
 import os
 import re
+import json
 import questionary
 from rich.console import Console
 
 from src.db_manager import init_db, add_to_cart, get_cart_items, remove_from_cart, clear_cart, format_cart_table
 from src.ffmpeg_manager import ensure_ffmpeg, verify_media_file, get_ffmpeg_paths
+import src.telegram_manager as tm
 from src.config_manager import (
     load_config, save_config, add_target_url, set_active_url, delete_target_url,
-    get_download_dir, set_download_dir, set_organize_mode
+    get_download_dir, set_download_dir, set_organize_mode, save_config_key,
 )
 from src.scraper import fetch_featured_content, search_content
 from src.ui import (
     print_header, format_featured_table, print_error, print_success,
-    print_download_summary, print_startup_dependency_notice
+    print_download_summary, print_startup_dependency_notice,
+    format_backup_table, format_local_delete_table,
+    format_hybrid_results, format_hybrid_table,
+)
+from src.telegram_manager import (
+    ensure_telethon, create_client, login_flow, is_configured, is_logged_in,
+    get_destinations, scan_backups, upload_backup, restore_backup,
+    collect_local_entries, mark_backed_entries, matches_query,
 )
 from src.video_extractor import extract_video_sources
 from src.downloader import (
@@ -967,6 +976,138 @@ def handle_search(active_url: str, config: dict) -> None:
             else:
                 break
 
+def require_telegram_ready(config: dict) -> bool:
+    if not ensure_telethon(console):
+        return False
+    if not is_configured(config) or not is_logged_in():
+        console.print("[yellow]Telegram belum terhubung. Setup diperlukan sekali saja.[/yellow]")
+        return bool(login_flow(console, config))
+    return True
+
+
+def scan_with_spinner(config: dict) -> list:
+    with console.status("[bold cyan]📡 Mencari di Telegram... / Searching in Telegram...[/bold cyan]", spinner="dots"):
+        client = create_client(config)
+        try:
+            items = scan_backups(client, get_destinations(config))
+        finally:
+            client.disconnect()
+    return items
+
+
+def handle_telegram_settings(config: dict) -> None:
+    while True:
+        fresh = load_config()
+        config.update(fresh)
+        dests_raw = fresh.get("tg_destinations", '["saved"]')
+        console.print(f"\n[bold cyan]⚙️ TELEGRAM SETTINGS[/bold cyan]")
+        console.print(f"API ID  : [yellow]{fresh.get('tg_api_id') or '-'}[/yellow]")
+        console.print(f"Channel : [yellow]{fresh.get('tg_channel_id') or '-'}[/yellow]")
+        console.print(f"Auto-backup : [yellow]{'ON' if fresh.get('tg_auto_backup') == '1' else 'OFF'}[/yellow]")
+        console.print(f"Tujuan  : [yellow]{dests_raw}[/yellow]")
+
+        action = questionary.select(
+            "Pilih Pengaturan:",
+            choices=[
+                "🔑 Isi Ulang API ID / Hash",
+                "📢 Set Channel Tujuan / Set Target Channel",
+                "🎯 Ubah Tujuan Backup (Saved/Channel)",
+                "🤖 Toggle Auto-Backup",
+                "🚪 Logout (hapus session)",
+                "⬅ Kembali / Back",
+            ]
+        ).ask()
+        if not action or action == "⬅ Kembali / Back":
+            return
+        if action == "🔑 Isi Ulang API ID / Hash":
+            api_id = questionary.text("API ID:", default=fresh.get("tg_api_id", "")).ask()
+            api_hash = questionary.text("API Hash:", default=fresh.get("tg_api_hash", "")).ask()
+            if api_id and api_hash:
+                if not api_id.strip().isdigit():
+                    console.print("[red]API ID harus berupa angka.[/red]")
+                else:
+                    save_config_key("tg_api_id", api_id.strip())
+                    save_config_key("tg_api_hash", api_hash.strip())
+                    print_success("API credentials disimpan.")
+        elif action == "📢 Set Channel Tujuan / Set Target Channel":
+            channel = questionary.text("Username channel (@nama) atau ID (-100...):",
+                                       default=fresh.get("tg_channel_id", "")).ask()
+            if channel is not None:
+                save_config_key("tg_channel_id", channel.strip())
+                print_success("Channel disimpan. Pastikan Anda adalah admin/member channel tersebut.")
+        elif action == "🎯 Ubah Tujuan Backup (Saved/Channel)":
+            picked = questionary.checkbox(
+                "Pilih tujuan backup (urutan = prioritas, yang pertama jadi tujuan utama):",
+                choices=["saved - Saved Messages", "channel - Channel Privat"],
+            ).ask()
+            if picked:
+                names = [p.split(" ")[0] for p in picked]
+                save_config_key("tg_destinations", json.dumps(names))
+                print_success(f"Tujuan backup: {names}")
+        elif action == "🤖 Toggle Auto-Backup":
+            new_val = "0" if fresh.get("tg_auto_backup") == "1" else "1"
+            save_config_key("tg_auto_backup", new_val)
+            print_success(f"Auto-backup: {'ON' if new_val == '1' else 'OFF'}")
+        elif action == "🚪 Logout (hapus session)":
+            confirm = questionary.confirm("Hapus session Telegram di PC ini?").ask()
+            if confirm:
+                tm.logout_session()
+                print_success("Session Telegram dihapus.")
+
+
+def handle_telegram_search_restore(config: dict) -> None:
+    if not require_telegram_ready(config):
+        return
+    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+
+
+def handle_telegram_list(config: dict) -> None:
+    if not require_telegram_ready(config):
+        return
+    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+
+
+def handle_telegram_manual_backup(config: dict) -> None:
+    if not require_telegram_ready(config):
+        return
+    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+
+
+def handle_telegram_delete_local(config: dict) -> None:
+    if not require_telegram_ready(config):
+        return
+    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+
+
+def handle_telegram_menu(active_url: str, config: dict) -> None:
+    while True:
+        action = questionary.select(
+            "📡 Telegram Backup — Pilih Aksi:",
+            choices=[
+                "🔍 Cari & Restore dari Telegram / Search & Restore",
+                "📚 Daftar Semua Backup / List All Backups",
+                "📤 Backup Manual / Manual Backup",
+                "🗑️ Hapus File Lokal / Delete Local Files",
+                "⚙️ Pengaturan Telegram / Telegram Settings",
+                "⬅ Kembali / Back",
+            ]
+        ).ask()
+        if action is None or action == "⬅ Kembali / Back":
+            return
+        fresh = load_config()
+        config.update(fresh)
+        if action.startswith("⚙️"):
+            handle_telegram_settings(config)
+        elif action.startswith("🔍"):
+            handle_telegram_search_restore(fresh)
+        elif action.startswith("📚"):
+            handle_telegram_list(fresh)
+        elif action.startswith("📤"):
+            handle_telegram_manual_backup(fresh)
+        elif action.startswith("🗑️"):
+            handle_telegram_delete_local(fresh)
+
+
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v", "version"):
         console.print("I Am Not Pirates v1.3.0")
@@ -1015,11 +1156,12 @@ def main() -> None:
                 "6. 🌐 Switch Target URL / Pilih Active Target URL",
                 "7. ➕ Add New Target URL / Tambah Target URL Baru",
                 "8. ⚙️  Manage Target URLs / Kelola Daftar Target URL",
-                "9. ❌ Exit / Keluar",
+                "9. 📡 Telegram Backup / Kelola Backup Telegram",
+                "10. ❌ Exit / Keluar",
             ]
         ).ask()
 
-        if choice is None or choice.startswith("9."):
+        if choice is None or choice.startswith("10."):
             console.print("[bold yellow]Terima kasih! Sampai jumpa.[/bold yellow]")
             sys.exit(0)
         elif choice.startswith("1."):
@@ -1038,6 +1180,8 @@ def main() -> None:
             handle_add_url()
         elif choice.startswith("8."):
             handle_manage_urls()
+        elif choice.startswith("9."):
+            handle_telegram_menu(active_url, config)
 
 if __name__ == "__main__":
     main()
