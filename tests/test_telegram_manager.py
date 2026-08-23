@@ -204,20 +204,18 @@ class FakeClient:
 
     def iter_messages(self, target, reverse=None, limit=None):
         self.iter_calls.append((target, reverse, limit))
-        messages = self._messages_by_target.get(target, [])
-        return iter(list(reversed(messages)) if reverse else messages)
+        return iter(self._messages_by_target.get(target, []))
 
 
 DESTS = [{"type": "saved", "target": "me"}]
-CHANNEL_MSGS_VIDEO_META = dict(VIDEO_META)
 
 
 def test_scan_groups_parts_subs_and_skips_foreign():
     messages = [
-        FakeMsg(1, caption=build_caption(SUB_META), file_name="Film A.id.srt"),
+        FakeMsg(1, caption=build_caption(VIDEO_META), file_name="Film A.part001"),
         FakeMsg(2),  # part 2 tanpa caption app
-        FakeMsg(3, caption=build_caption(VIDEO_META), file_name="Film A.part001"),
-        FakeMsg(99, caption="caption orang lain"),  # dilewati
+        FakeMsg(3, caption=build_caption(SUB_META), file_name="Film A.id.srt"),
+        FakeMsg(99, caption="caption orang lain", file_name="other.bin"),  # dilewati
     ]
     client = FakeClient({"me": messages})
     items = scan_backups(client, DESTS)
@@ -225,16 +223,47 @@ def test_scan_groups_parts_subs_and_skips_foreign():
     assert len(items) == 1
     item = items[0]
     assert item["title"] == "Film A"
-    assert item["video_msg_ids"] == [3, 2]
-    assert item["sub_msg_ids"] == [1]
+    assert item["video_msg_ids"] == [1, 2]
+    assert item["sub_msg_ids"] == [3]
     assert item["subtitles"] == ["Film A.id.srt"]
     assert item["chat"] == "me"
 
 
+def test_part_cap_rejects_extra_uncaptioned_doc():
+    messages = [
+        FakeMsg(1, caption=build_caption(VIDEO_META), file_name="Film A.part001"),
+        FakeMsg(2),
+        FakeMsg(3, caption=build_caption(SUB_META), file_name="Film A.id.srt"),
+        FakeMsg(99, caption="caption orang lain", file_name="other.bin"),
+        FakeMsg(4),
+    ]
+    items = scan_backups(FakeClient({"me": messages}), DESTS)
+    assert len(items) == 1
+    assert items[0]["video_msg_ids"] == [1, 2]
+
+
+def test_skips_messages_without_document():
+    bare = type("Bare", (), {"id": 9, "message": None})()
+    messages = [
+        FakeMsg(1, caption=build_caption(VIDEO_META), file_name="Film A.part001"),
+        bare,
+        FakeMsg(2),
+    ]
+    items = scan_backups(FakeClient({"me": messages}), DESTS)
+    assert len(items) == 1
+    assert items[0]["video_msg_ids"] == [1, 2]
+
+
 def test_scan_all_destinations_no_dedupe_between_targets():
     ch_meta = dict(VIDEO_META)
-    msgs_me = [FakeMsg(3, caption=build_caption(ch_meta), file_name="p1")]
-    msgs_channel = [FakeMsg(55, caption=build_caption(ch_meta), file_name="p1")]
+    msgs_me = [
+        FakeMsg(3, caption=build_caption(ch_meta), file_name="p1"),
+        FakeMsg(4),
+    ]
+    msgs_channel = [
+        FakeMsg(55, caption=build_caption(ch_meta), file_name="p1"),
+        FakeMsg(56),
+    ]
     client = FakeClient({"me": msgs_me, "@c": msgs_channel})
     items = scan_backups(client, [
         {"type": "saved", "target": "me"},
