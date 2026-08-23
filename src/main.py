@@ -1055,16 +1055,80 @@ def handle_telegram_settings(config: dict) -> None:
                 print_success("Session Telegram dihapus.")
 
 
+def _confirm_or_proceed(message: str) -> bool:
+    try:
+        return bool(questionary.confirm(message).ask())
+    except Exception:
+        return True
+
+
+def _pause() -> None:
+    try:
+        questionary.press_any_key_to_continue(message="Tekan sebarang tombol...").ask()
+    except Exception:
+        pass
+
+
 def handle_telegram_search_restore(config: dict) -> None:
     if not require_telegram_ready(config):
         return
-    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+    query = questionary.text("Masukkan judul yang dicari di backup Telegram:").ask()
+    if not query or not query.strip():
+        return
+    try:
+        items = scan_with_spinner(config)
+    except Exception as exc:
+        print_error(f"Gagal membaca Telegram: {exc}")
+        return
+    filtered = [it for it in items if matches_query(it.get("title", ""), query.strip())]
+    if not filtered:
+        console.print(f"[yellow]Tidak ada backup cocok untuk \"{query.strip()}\".[/yellow]")
+        _pause()
+        return
+    console.print(format_backup_table(filtered))
+    raw = questionary.text(f"Pilih nomor untuk restore (1-{len(filtered)}, kosongkan untuk batal):").ask()
+    if not raw or not raw.strip().isdigit() or not (1 <= int(raw) <= len(filtered)):
+        console.print("[yellow]Restore dibatalkan.[/yellow]")
+        return
+    chosen = filtered[int(raw) - 1]
+    if not _confirm_or_proceed(f"Restore '{chosen['title']}' ke folder lokal sekarang?"):
+        return
+    try:
+        client = create_client(config)
+        try:
+            with console.status("[bold cyan]⬇️ Mengunduh dari Telegram... / Downloading...[/bold cyan]", spinner="dots"):
+                out_path = restore_backup(client, chosen, config)
+        finally:
+            client.disconnect()
+    except Exception as exc:
+        print_error(f"Restore gagal: {exc}")
+        return
+    print_success(f"Restore selesai: {out_path}")
+    try:
+        import subprocess
+        target = os.path.normpath(out_path)
+        folder = os.path.dirname(target)
+        if folder and os.path.isdir(folder):
+            subprocess.Popen(["explorer", "/select,", target])
+    except Exception:
+        pass
+    _pause()
 
 
 def handle_telegram_list(config: dict) -> None:
     if not require_telegram_ready(config):
         return
-    console.print("[yellow]Belum diimplementasi di task ini.[/yellow]")
+    try:
+        items = scan_with_spinner(config)
+    except Exception as exc:
+        print_error(f"Gagal membaca Telegram: {exc}")
+        return
+    if not items:
+        console.print("[yellow]Belum ada backup di tujuan Telegram yang dikonfigurasi.[/yellow]")
+        _pause()
+        return
+    console.print(format_backup_table(items))
+    _pause()
 
 
 def handle_telegram_manual_backup(config: dict) -> None:

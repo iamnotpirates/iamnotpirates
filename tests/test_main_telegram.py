@@ -59,3 +59,44 @@ def test_main_routes_option_nine_then_exit(
     with pytest.raises(SystemExit):
         main_fn()
     mock_tg.assert_called_once()
+
+
+SCAN_ITEMS = [
+    {"title": "Film A", "year": "2024", "media_type": "movie", "season": None,
+     "episode": None, "file_size": 10, "part_count": 1, "subtitles": [],
+     "video_msg_ids": [1], "sub_msg_ids": [], "chat": "me"},
+    {"title": "Series B", "year": "2023", "media_type": "episode", "season": 1,
+     "episode": 2, "file_size": 20, "part_count": 1, "subtitles": [],
+     "video_msg_ids": [2], "sub_msg_ids": [], "chat": "me"},
+]
+
+
+@patch("src.main.questionary.press_any_key_to_continue")
+@patch("src.main.scan_with_spinner", return_value=SCAN_ITEMS)
+@patch("src.main.require_telegram_ready", return_value=True)
+def test_handle_telegram_lists_all_backups(mock_ready, mock_scan, mock_press, capsys):
+    from src.main import handle_telegram_list
+    handle_telegram_list({})
+    out = capsys.readouterr().out
+    assert "Film A" in out and "Series B" in out
+    mock_scan.assert_called_once()
+
+
+@patch("src.main.restore_backup", return_value="C:/out/Film A.mp4")
+@patch("src.main.create_client")
+@patch("src.main.questionary.text")
+@patch("src.main.scan_with_spinner", return_value=SCAN_ITEMS)
+@patch("src.main.require_telegram_ready", return_value=True)
+def test_handle_telegram_search_restores_selected(
+    mock_ready, mock_scan, mock_text, mock_client, mock_restore
+):
+    from src.main import handle_telegram_search_restore
+
+    mock_text.return_value = MagicMock(ask=MagicMock(side_effect=[
+        "film a",  # query pencarian
+        "1",       # pilih nomor item hasil filter
+    ]))
+    handle_telegram_search_restore({})
+    mock_restore.assert_called_once()
+    called_item = mock_restore.call_args[0][1]
+    assert called_item["title"] == "Film A"
