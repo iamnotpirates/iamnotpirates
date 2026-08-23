@@ -93,6 +93,26 @@ Powered by the ultra-fast multi-threaded **N_m3u8DL-RE** download engine, SQLite
 
 ---
 
+## 📡 Telegram Backup (*Backup Telegram*)
+
+Back up your downloaded media collection to your own Telegram account as an off-site cloud archive, and restore it anytime.  
+(*Cadangkan koleksi media hasil download ke akun Telegram Anda sendiri sebagai arsip cloud off-site, dan pulihkan kapan saja.*)
+
+- **Prerequisites (*Prasyarat*)**: Create an application at [my.telegram.org](https://my.telegram.org) to obtain your `api_id` & `api_hash`, then fill them in via the 📡 Telegram menu (one-time MTProto login with your phone number).  
+  *(Buat aplikasi di [my.telegram.org](https://my.telegram.org) untuk mendapatkan `api_id` & `api_hash`, lalu isi melalui menu 📡 Telegram — login MTProto sekali dengan nomor telepon Anda.)*
+- **Manual & Automatic Backup** (*Backup Manual & Otomatis*): Back up any movie/series on demand, or let the app back up newly completed downloads automatically after each successful download.  
+  *(Backup film/series kapan saja secara manual, atau biarkan aplikasi mem-backup unduhan baru yang selesai secara otomatis setelah download berhasil.)*
+- **Multi-Destination Forwarding** (*Forward Multi-Tujuan*): Send each backup to multiple destinations at once — e.g. **Saved Messages** and/or your own **Channel**.  
+  *(Kirim setiap backup ke beberapa tujuan sekaligus — misalnya **Saved Messages** dan/atau **Channel** milik Anda sendiri.)*
+- **Automatic >2GB Splitting** (*Split Otomatis >2GB*): Files larger than the Telegram 2GB limit are split automatically into parts and merged seamlessly back together during restore.  
+  *(File yang melebihi batas 2GB Telegram dipecah otomatis menjadi beberapa bagian dan digabung kembali secara mulus saat restore.)*
+- **Restore via Menu or Hybrid Search** (*Restore via Menu atau Pencarian Hybrid*): Restore from the 📡 Telegram menu, or find backed-up items directly in the search results table — IDLIX results and Telegram backups are combined into one list.  
+  *(Pulihkan dari menu 📡 Telegram, atau temukan item backup langsung di tabel hasil pencarian — hasil IDLIX dan backup Telegram digabung dalam satu daftar.)*
+- **Two-Level Deletion Guard** (*Pengaman Hapus Dua Tingkat*): Deleting a local file that has **not** been backed up yet triggers a double warning before proceeding, so you never lose unarchived media by accident.  
+  *(Menghapus file lokal yang belum dibackup akan memicu peringatan ganda sebelum lanjut, sehingga media yang belum diarsipkan tidak hilang karena kelalaian.)*
+
+---
+
 ## 🛠️ Developer Setup & Source Installation (*Instalasi Sumber & Developer*)
 
 ### Using `uv` (Recommended) (*Menggunakan `uv` — Direkomendasikan*)
