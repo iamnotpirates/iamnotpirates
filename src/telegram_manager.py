@@ -307,10 +307,7 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
     finally:
         cleanup_parts(part_files)
         if unique_tmp_dir is not None:
-            try:
-                os.rmdir(unique_tmp_dir)
-            except OSError:
-                pass
+            shutil.rmtree(unique_tmp_dir, ignore_errors=True)
 
     sub_msg_ids = []
     for sub_path in sub_paths:

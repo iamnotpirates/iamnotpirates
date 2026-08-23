@@ -369,3 +369,26 @@ def test_upload_subtitles_as_documents_with_marker_caption(tmp_path):
     assert sub_sent["force_document"] is True
     assert '"kind": "subtitle"' in sub_sent["caption"].replace("'", '"')
     assert "Film B.id.srt" in sub_sent["caption"]
+
+
+def test_auto_tmp_dir_created_and_removed(monkeypatch, tmp_path):
+    import src.telegram_manager as tm
+    auto_root = tmp_path / "auto_split"
+    auto_root.mkdir()
+    monkeypatch.setattr(tm, "TMP_SPLIT_DIR", str(auto_root))
+    monkeypatch.setattr(tm, "PART_SIZE", 1300)
+    seen = []
+    real_split = tm.split_file
+
+    def recording_split(path, part_size, tmp_dir):
+        seen.extend(os.listdir(str(auto_root)))
+        return real_split(path, part_size=part_size, tmp_dir=tmp_dir)
+
+    monkeypatch.setattr(tm, "split_file", recording_split)
+    src = _make_big_file(tmp_path, 2500)
+    client = RecordingClient()
+    upload_backup(client, src, [], dict(META), [{"type": "saved", "target": "me"}])
+    assert len(client.sent) == 2
+    assert len(seen) == 1
+    assert seen[0].startswith("up_")
+    assert os.listdir(str(auto_root)) == []
