@@ -100,6 +100,11 @@ def init_db(db_path: Optional[str] = None) -> None:
         "series_dir": os.path.join(os.path.expanduser("~"), "Downloads", "TV Series"),
         "combined_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
         "download_dir": os.path.join(os.path.expanduser("~"), "Downloads"),
+        "tg_api_id": "",
+        "tg_api_hash": "",
+        "tg_auto_backup": "0",
+        "tg_destinations": '["saved"]',
+        "tg_channel_id": "",
     }
 
     for k, v in default_configs.items():

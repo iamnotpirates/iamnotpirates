@@ -3,6 +3,7 @@ import pytest
 import sqlite3
 import rich.table
 from src import db_manager
+from src.db_manager import init_db, load_config
 
 
 def test_init_db_creates_file_and_tables_and_seeds_defaults(tmp_path):
@@ -192,4 +193,27 @@ def test_cart_operations(tmp_path):
     # Format table
     table = db_manager.format_cart_table([{"title": "X", "url": "Y", "type": "Z", "timestamp": "2026-08-19T23:18:08.123"}])
     assert isinstance(table, rich.table.Table)
+
+
+def test_init_db_seeds_telegram_config_keys(tmp_path):
+    import sqlite3
+    db = str(tmp_path / "t.db")
+    init_db(db_path=db)
+    conn = sqlite3.connect(db)
+    cursor = conn.cursor()
+    cursor.execute("SELECT key, value FROM configs WHERE key LIKE 'tg_%'")
+    rows = dict(cursor.fetchall())
+    conn.close()
+    assert rows["tg_api_id"] == ""
+    assert rows["tg_api_hash"] == ""
+    assert rows["tg_auto_backup"] == "0"
+    assert rows["tg_destinations"] == '["saved"]'
+    assert rows["tg_channel_id"] == ""
+
+
+def test_load_config_contains_telegram_defaults(tmp_path):
+    db = str(tmp_path / "t.db")
+    cfg = load_config(db_path=db)
+    assert cfg.get("tg_auto_backup") == "0"
+    assert cfg.get("tg_destinations") == '["saved"]'
 
