@@ -216,7 +216,7 @@ def login_flow(console, config: dict) -> bool:
         console.print("[bold cyan]Panduan sekali saja:[/bold cyan] buka https://my.telegram.org "
                       "-> API development tools -> buat aplikasi -> salin api_id & api_hash.")
         api_id = questionary.text("Masukkan API ID:").ask()
-        api_hash = questionary.text("Masukkan API Hash:", password=True).ask()
+        api_hash = questionary.password("Masukkan API Hash:").ask()
         if not api_id or not api_hash:
             console.print("[red]API ID/Hash wajib diisi.[/red]")
             return False

@@ -63,6 +63,36 @@ def test_main_routes_option_nine_then_exit(
     mock_tg.assert_called_once()
 
 
+@patch("src.main.save_config_key")
+@patch("src.main.load_config", return_value={})
+@patch("src.main.questionary.select")
+@patch("src.main.questionary.password")
+@patch("src.main.questionary.text")
+def test_settings_api_hash_uses_password_prompt(mock_text, mock_pw, mock_select, mock_load, mock_save):
+    def strict_text(_prompt, **kwargs):
+        unexpected = set(kwargs) - {"default"}
+        if unexpected:
+            raise TypeError(f"text() got unexpected kwargs: {unexpected}")
+        return MagicMock(ask=MagicMock(return_value="38489027"))
+
+    mock_text.side_effect = strict_text
+    mock_pw.return_value = MagicMock(ask=MagicMock(return_value="h"))
+    mock_select.return_value = MagicMock(ask=MagicMock(side_effect=[
+        "🔑 Isi Ulang API ID / Hash",
+        "⬅ Kembali / Back",
+    ]))
+
+    from src.main import handle_telegram_settings
+    handle_telegram_settings({})
+
+    assert mock_pw.called
+    assert mock_pw.return_value.ask.called
+    saved = {call.args[0]: call.args[1] for call in mock_save.call_args_list}
+    assert saved.get("tg_api_id") == "38489027"
+    assert saved.get("tg_api_hash") == "h"
+    assert mock_text.call_count == 1
+
+
 SCAN_ITEMS = [
     {"title": "Film A", "year": "2024", "media_type": "movie", "season": None,
      "episode": None, "file_size": 10, "part_count": 1, "subtitles": [],

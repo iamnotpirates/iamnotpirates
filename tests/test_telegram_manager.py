@@ -186,10 +186,50 @@ def test_login_flow_rejects_non_numeric_api_id(monkeypatch):
         "questionary.text",
         lambda _prompt, **_kwargs: MagicMock(ask=lambda: next(answers)),
     )
+    monkeypatch.setattr(
+        "questionary.password",
+        lambda _prompt, **_kwargs: MagicMock(ask=lambda: next(answers)),
+    )
     saved = {}
     monkeypatch.setattr(tm, "save_config_key", lambda key, value: saved.setdefault(key, value))
     assert tm.login_flow(MagicMock(), {}) is False
     assert saved == {}
+
+
+def test_login_flow_uses_password_prompt_for_api_hash(monkeypatch):
+    import src.telegram_manager as tm
+    answers = iter(["123456", "hashvalue", "+6281234567890"])
+    prompts = []
+
+    def fake_text(_prompt, **kwargs):
+        if kwargs:
+            raise TypeError(f"text() got unexpected kwargs: {kwargs}")
+        prompts.append(("text", _prompt))
+        return MagicMock(ask=lambda: next(answers))
+
+    def fake_password(_prompt, **kwargs):
+        prompts.append(("password", _prompt))
+        return MagicMock(ask=lambda: next(answers))
+
+    monkeypatch.setattr("questionary.text", fake_text)
+    monkeypatch.setattr("questionary.password", fake_password)
+
+    class FakeClient:
+        def start(self, phone=None):
+            return self
+
+        def is_user_authorized(self):
+            return True
+
+        def disconnect(self):
+            pass
+
+    saved = {}
+    monkeypatch.setattr(tm, "save_config_key", lambda k, v: saved.setdefault(k, v))
+    monkeypatch.setattr(tm, "create_client", lambda config: FakeClient())
+    assert tm.login_flow(MagicMock(), {}) is True
+    assert ("password", "Masukkan API Hash:") in prompts
+    assert saved["tg_api_hash"] == "hashvalue"
 
 
 from src.telegram_manager import scan_backups, build_caption
