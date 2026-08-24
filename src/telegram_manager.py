@@ -131,6 +131,24 @@ def logout_session() -> None:
             pass
 
 
+def parse_destination_input(raw: str) -> list:
+    tokens = [t.strip() for t in re.split(r"[,\s]+", (raw or "").strip()) if t.strip()]
+    valid = []
+    for token in tokens:
+        lowered = token.lower()
+        if lowered == "saved":
+            valid.append("saved")
+        elif lowered.startswith("channel:") and lowered[8:].strip():
+            valid.append(f"channel:{token[8:].strip()}")
+        elif lowered.startswith("group:"):
+            parts = token.split(":")
+            group_id = parts[1].strip() if len(parts) > 1 else ""
+            topic = parts[2].strip() if len(parts) > 2 else ""
+            if group_id and (not topic or topic.isdigit()):
+                valid.append(f"group:{group_id}:{topic}" if topic else f"group:{group_id}")
+    return valid or ["saved"]
+
+
 def get_destinations(config: dict) -> list:
     raw = config.get("tg_destinations") or '["saved"]'
     try:
@@ -141,12 +159,22 @@ def get_destinations(config: dict) -> list:
         names = ["saved"]
     destinations = []
     for name in names:
-        if name == "saved":
-            destinations.append({"type": "saved", "target": "me"})
-        elif name == "channel":
+        token = str(name).strip()
+        lowered = token.lower()
+        if lowered == "saved":
+            destinations.append({"type": "saved", "target": "me", "topic": None})
+        elif lowered == "channel":
             channel_id = (config.get("tg_channel_id") or "").strip()
             if channel_id:
-                destinations.append({"type": "channel", "target": channel_id})
+                destinations.append({"type": "channel", "target": channel_id, "topic": None})
+        elif lowered.startswith("channel:") and token[8:].strip():
+            destinations.append({"type": "channel", "target": token[8:].strip(), "topic": None})
+        elif lowered.startswith("group:") and len(token.split(":")) >= 2 and token.split(":")[1].strip():
+            parts = token.split(":")
+            target = parts[1].strip()
+            topic_text = parts[2].strip() if len(parts) > 2 else ""
+            topic = int(topic_text) if topic_text.isdigit() else None
+            destinations.append({"type": "group", "target": target, "topic": topic})
     return destinations
 
 
@@ -275,7 +303,9 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
                   tmp_dir: Optional[str] = None) -> dict:
     if not destinations:
         raise ValueError("Tujuan backup Telegram belum diatur.")
-    primary_target = destinations[0]["target"]
+    primary = destinations[0]
+    primary_target = primary["target"]
+    primary_topic = primary.get("topic")
     size = os.path.getsize(file_path)
     part_count = math.ceil(size / PART_SIZE) if size > PART_SIZE else 1
     video_meta = {
@@ -291,17 +321,11 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
     }
     caption = build_caption(video_meta)
     video_msg_ids = []
+    sub_msg_ids = []
     part_files = []
     unique_tmp_dir = None
     try:
-        if part_count == 1:
-            msg = client.send_file(
-                primary_target, file_path, caption=caption,
-                force_document=False, supports_streaming=True,
-                progress_callback=progress_callback,
-            )
-            video_msg_ids.append(msg.id)
-        else:
+        if part_count > 1:
             if tmp_dir is None:
                 os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
                 unique_tmp_dir = tempfile.mkdtemp(prefix="up_", dir=TMP_SPLIT_DIR)
@@ -309,38 +333,64 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
             else:
                 split_dir = tmp_dir
             part_files = split_file(file_path, part_size=PART_SIZE, tmp_dir=split_dir)
-            for index, part_path in enumerate(part_files):
+
+        def _send_video(target, reply_to, record):
+            ids = []
+            if part_count == 1:
                 msg = client.send_file(
-                    primary_target, part_path,
-                    caption=caption if index == 0 else "",
-                    force_document=True,
-                    progress_callback=progress_callback,
+                    target, file_path, caption=caption,
+                    force_document=False, supports_streaming=True,
+                    progress_callback=progress_callback, reply_to=reply_to,
                 )
-                video_msg_ids.append(msg.id)
+                ids.append(msg.id)
+            else:
+                for index, part_path in enumerate(part_files):
+                    msg = client.send_file(
+                        target, part_path,
+                        caption=caption if index == 0 else "",
+                        force_document=True,
+                        progress_callback=progress_callback, reply_to=reply_to,
+                    )
+                    ids.append(msg.id)
+            if record:
+                video_msg_ids.extend(ids)
+            return ids
+
+        def _send_subs(target, reply_to):
+            ids = []
+            for sub_path in sub_paths:
+                sub_meta = {
+                    "kind": "subtitle",
+                    "filename": os.path.basename(sub_path),
+                    "parent_title": video_meta["title"],
+                }
+                smsg = client.send_file(
+                    target, sub_path, caption=build_caption(sub_meta),
+                    force_document=True, reply_to=reply_to,
+                )
+                ids.append(smsg.id)
+            return ids
+
+        _send_video(primary_target, primary_topic, record=True)
+        sub_msg_ids = _send_subs(primary_target, primary_topic)
+
+        forwarded_to = []
+        all_primary_ids = video_msg_ids + sub_msg_ids
+        for destination in destinations[1:]:
+            target = destination["target"]
+            topic = destination.get("topic")
+            if topic is not None:
+                _send_video(target, topic, record=False)
+                _send_subs(target, topic)
+            else:
+                client.forward_messages(target, all_primary_ids, primary_target)
+                forwarded_to.append(target)
+
+        return {"video_msg_ids": video_msg_ids, "sub_msg_ids": sub_msg_ids, "forwarded_to": forwarded_to}
     finally:
         cleanup_parts(part_files)
         if unique_tmp_dir is not None:
             shutil.rmtree(unique_tmp_dir, ignore_errors=True)
-
-    sub_msg_ids = []
-    for sub_path in sub_paths:
-        sub_meta = {
-            "kind": "subtitle",
-            "filename": os.path.basename(sub_path),
-            "parent_title": video_meta["title"],
-        }
-        smsg = client.send_file(
-            primary_target, sub_path, caption=build_caption(sub_meta),
-            force_document=True,
-        )
-        sub_msg_ids.append(smsg.id)
-
-    forwarded_to = []
-    for destination in destinations[1:]:
-        client.forward_messages(destination["target"], video_msg_ids + sub_msg_ids, primary_target)
-        forwarded_to.append(destination["target"])
-
-    return {"video_msg_ids": video_msg_ids, "sub_msg_ids": sub_msg_ids, "forwarded_to": forwarded_to}
 
 
 def collect_local_entries() -> list:

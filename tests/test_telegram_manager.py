@@ -4,7 +4,7 @@ from unittest.mock import MagicMock, patch
 
 from src.telegram_manager import (
     is_configured, is_logged_in, get_destinations,
-    ensure_telethon, create_client,
+    ensure_telethon, create_client, parse_destination_input,
 )
 from src.telegram_manager import build_caption, parse_caption
 from src.telegram_manager import split_file, merge_files, cleanup_parts, PART_SIZE
@@ -131,18 +131,39 @@ def test_is_logged_in_checks_session_file(monkeypatch, tmp_path):
 
 def test_get_destinations_saved_only_default():
     dests = get_destinations({"tg_destinations": '["saved"]'})
-    assert dests == [{"type": "saved", "target": "me"}]
+    assert dests == [{"type": "saved", "target": "me", "topic": None}]
 
 
 def test_get_destinations_channel_requires_channel_id():
     assert get_destinations({
         "tg_destinations": '["saved","channel"]', "tg_channel_id": "@mychan"
     }) == [
-        {"type": "saved", "target": "me"},
-        {"type": "channel", "target": "@mychan"},
+        {"type": "saved", "target": "me", "topic": None},
+        {"type": "channel", "target": "@mychan", "topic": None},
     ]
     assert get_destinations({"tg_destinations": '["channel"]', "tg_channel_id": ""}) == []
-    assert get_destinations({"tg_destinations": "bukan-json"}) == [{"type": "saved", "target": "me"}]
+    assert get_destinations({"tg_destinations": "bukan-json"}) == [{"type": "saved", "target": "me", "topic": None}]
+
+
+def test_get_destinations_flexible_formats():
+    dests = get_destinations({"tg_destinations":
+        '["saved","channel:@c","group:-100123","group:-100999:7"]'})
+    assert dests == [
+        {"type": "saved", "target": "me", "topic": None},
+        {"type": "channel", "target": "@c", "topic": None},
+        {"type": "group", "target": "-100123", "topic": None},
+        {"type": "group", "target": "-100999", "topic": 7},
+    ]
+
+
+def test_parse_destination_input_tokens():
+    raw = "saved, channel:@c  group:-100123:7 bogus channel:"
+    assert parse_destination_input(raw) == ["saved", "channel:@c", "group:-100123:7"]
+
+
+def test_parse_destination_input_empty_defaults_saved():
+    assert parse_destination_input("   ") == ["saved"]
+    assert parse_destination_input("") == ["saved"]
 
 
 def test_ensure_telethon_true_when_importable():
@@ -297,11 +318,12 @@ class RecordingClient:
         self._id = 100
 
     def send_file(self, target, path, caption="", force_document=False,
-                  supports_streaming=False, progress_callback=None):
+                  supports_streaming=False, progress_callback=None, reply_to=None):
         self._id += 1
         self.sent.append({
             "target": target, "path": path, "caption": caption,
             "force_document": force_document, "supports_streaming": supports_streaming,
+            "reply_to": reply_to,
         })
         msg = MagicMock()
         msg.id = self._id
@@ -392,6 +414,63 @@ def test_auto_tmp_dir_created_and_removed(monkeypatch, tmp_path):
     assert len(seen) == 1
     assert seen[0].startswith("up_")
     assert os.listdir(str(auto_root)) == []
+
+
+FLEX_DESTS = [
+    {"type": "saved", "target": "me", "topic": None},
+    {"type": "channel", "target": "@c", "topic": None},
+    {"type": "group", "target": "-100g", "topic": None},
+    {"type": "group", "target": "-100t", "topic": 5},
+]
+
+
+def test_upload_topic_destination_reuploads_with_reply_to(tmp_path):
+    src = _make_big_file(tmp_path, 100)
+    sub = tmp_path / "Film B.id.srt"
+    sub.write_text("SUB")
+    client = RecordingClient()
+    result = upload_backup(client, src, [str(sub)], dict(META), FLEX_DESTS)
+
+    assert [(s["target"], s["reply_to"]) for s in client.sent if s["path"].endswith(".mp4")] == [
+        ("me", None), ("-100t", 5),
+    ]
+    assert [(s["target"], s["reply_to"]) for s in client.sent if s["path"].endswith(".srt")] == [
+        ("me", None), ("-100t", 5),
+    ]
+    assert [(f[0], f[2]) for f in client.forwards] == [("@c", "me"), ("-100g", "me")]
+    assert set(result["forwarded_to"]) == {"@c", "-100g"}
+    assert "-100t" not in result["forwarded_to"]
+
+
+def test_upload_primary_topic_destination_sends_with_reply_to(tmp_path):
+    src = _make_big_file(tmp_path, 100)
+    client = RecordingClient()
+    upload_backup(client, src, [], dict(META), [{"type": "group", "target": "-100t", "topic": 9}])
+    assert len(client.sent) == 1
+    assert (client.sent[0]["target"], client.sent[0]["reply_to"]) == ("-100t", 9)
+    assert client.forwards == []
+
+
+def test_upload_multi_part_topic_reuploads_all_parts(monkeypatch, tmp_path):
+    import src.telegram_manager as tm
+    monkeypatch.setattr(tm, "PART_SIZE", 1300)
+    src = _make_big_file(tmp_path, 2500)
+    parts_dir = tmp_path / "parts"
+    client = RecordingClient()
+    upload_backup(client, src, [], dict(META),
+                  [{"type": "saved", "target": "me", "topic": None},
+                   {"type": "group", "target": "-100t", "topic": 3}],
+                  progress_callback=None, tmp_dir=str(parts_dir))
+    assert len(client.sent) == 4
+    assert all(s["force_document"] for s in client.sent)
+    assert [(s["target"], s["reply_to"]) for s in client.sent] == [
+        ("me", None), ("me", None), ("-100t", 3), ("-100t", 3),
+    ]
+    caps = [s["caption"] for s in client.sent]
+    assert caps[0] != ""
+    assert caps[1] == ""
+    assert caps[2] != ""
+    assert caps[3] == ""
 
 
 import pytest

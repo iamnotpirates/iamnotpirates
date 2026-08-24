@@ -226,6 +226,8 @@ iamnotpirates/
   *(Pesan asing yang dikirim di antara dua part split dapat memutus pengelompokan saat scan; verifikasi ukuran saat restore berfungsi sebagai jaring pengaman agar file rusak tidak tersimpan.)*
 - **Duplicate rows per destination are intentional** (*Baris duplikat per tujuan bersifat disengaja*): Items backed up to multiple destinations appear once per destination so restore can fall back to the other copy if one fails.  
   *(Item yang dibackup ke beberapa tujuan muncul satu baris per tujuan sehingga restore bisa fallback ke salinan lain jika salah satu gagal.)*
+- **Group topics are re-uploaded, not forwarded** (*Group dengan topik di-upload ulang*): Telegram forwarding cannot target a forum topic, so destinations like `group:<id>:<topic>` receive a fresh upload (extra bandwidth), while topic-less groups and channels are server-side forwards.  
+  *(Forward Telegram tidak bisa menentukan topik forum, jadi tujuan `group:<id>:<topik>` dikirim ulang penuh — bandwitdh ekstra; group tanpa topik dan channel tetap forward di sisi server.)*
 
 ---
 

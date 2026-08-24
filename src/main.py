@@ -1102,15 +1102,19 @@ def handle_telegram_settings(config: dict) -> None:
             if channel is not None:
                 save_config_key("tg_channel_id", channel.strip())
                 print_success("Channel disimpan. Pastikan Anda adalah admin/member channel tersebut.")
-        elif action == "🎯 Ubah Tujuan Backup (Saved/Channel)":
-            picked = questionary.checkbox(
-                "Pilih tujuan backup (urutan = prioritas, yang pertama jadi tujuan utama):",
-                choices=["saved - Saved Messages", "channel - Channel Privat"],
+        elif action == "🎯 Ubah Tujuan Backup (Saved/Channel/Group/Topik)":
+            console.print("[dim]Format per tujuan (pisahkan koma/spasi):[/dim]")
+            console.print("[dim]  saved | channel:<id> | group:<id> | group:<id>:<topik>[/dim]")
+            console.print("[dim]Contoh: saved, channel:@filmku, group:-100123456789:7[/dim]")
+            raw = questionary.text(
+                "Daftar tujuan backup (kosongkan untuk batal):"
             ).ask()
-            if picked:
-                names = [p.split(" ")[0] for p in picked]
-                save_config_key("tg_destinations", json.dumps(names))
-                print_success(f"Tujuan backup: {names}")
+            if raw and raw.strip():
+                tokens = tm.parse_destination_input(raw)
+                save_config_key("tg_destinations", json.dumps(tokens))
+                print_success(f"Tujuan backup: {tokens}")
+                console.print("[yellow]Catatan: group dengan topik di-upload ulang "
+                              "(forward Telegram tidak bisa menentukan topik).[/yellow]")
         elif action == "🤖 Toggle Auto-Backup":
             new_val = "0" if fresh.get("tg_auto_backup") == "1" else "1"
             save_config_key("tg_auto_backup", new_val)
