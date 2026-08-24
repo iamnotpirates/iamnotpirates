@@ -1014,12 +1014,18 @@ def require_telegram_ready(config: dict) -> bool:
 
 def scan_with_spinner(config: dict) -> list:
     with console.status("[bold cyan]📡 Mencari di Telegram... / Searching in Telegram...[/bold cyan]", spinner="dots"):
-        client = create_client(config)
+        client = _connected_client(config)
         try:
             items = scan_backups(client, get_destinations(config))
         finally:
             client.disconnect()
     return items
+
+
+def _connected_client(config: dict):
+    client = create_client(config)
+    client.connect()
+    return client
 
 
 def _backup_key_of(item: dict) -> str:
@@ -1030,7 +1036,7 @@ def _backup_key_of(item: dict) -> str:
 
 
 def _restore_from_telegram(config: dict, chosen: dict) -> str:
-    client = create_client(config)
+    client = _connected_client(config)
     try:
         try:
             progress, cb = _rich_progress(
@@ -1247,7 +1253,7 @@ def maybe_auto_backup(video_path: str, config: dict, title: str, year: str,
         }
         size = os.path.getsize(video_path)
         progress, cb = _rich_progress(size, f"☁️ {title}")
-        client = create_client(config)
+        client = _connected_client(config)
         try:
             with progress:
                 upload_backup(client, video_path, sub_paths, meta, destinations, progress_callback=cb)
@@ -1286,7 +1292,7 @@ def handle_telegram_manual_backup(config: dict) -> None:
         return
     success_count = 0
     fail_count = 0
-    client = create_client(config)
+    client = _connected_client(config)
     try:
         for pos, idx in enumerate(chosen_indices, start=1):
             entry = entries[idx]

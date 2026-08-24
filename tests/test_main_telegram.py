@@ -103,6 +103,58 @@ SCAN_ITEMS = [
 ]
 
 
+class DisconnectedFakeClient:
+    def __init__(self):
+        self.calls = []
+        self._connected = False
+
+    def connect(self):
+        self._connected = True
+        self.calls.append("connect")
+        return True
+
+    def disconnect(self):
+        self.calls.append("disconnect")
+        self._connected = False
+
+    def is_user_authorized(self):
+        return True
+
+    def send_file(self, *a, **k):
+        if not self._connected:
+            raise RuntimeError("Cannot send requests while disconnected")
+        return MagicMock(id=1)
+
+    def iter_messages(self, target, reverse=None, limit=None):
+        if not self._connected:
+            raise RuntimeError("Cannot send requests while disconnected")
+        self.calls.append("iter")
+        return iter([])
+
+
+@patch("src.main.get_destinations",
+       return_value=[{"type": "saved", "target": "me", "topic": None}])
+def test_scan_with_spinner_connects_client(mock_dests, monkeypatch):
+    fake = DisconnectedFakeClient()
+    monkeypatch.setattr(main_mod, "create_client", lambda cfg: fake)
+    main_mod.scan_with_spinner({})
+    assert fake.calls[0] == "connect"
+    assert "iter" in fake.calls
+    assert fake.calls[-1] == "disconnect"
+
+
+@patch("src.main.restore_backup", return_value="C:/ok/Film A.mp4")
+@patch("src.main.get_destinations",
+       return_value=[{"type": "saved", "target": "me", "topic": None}])
+def test_restore_helper_connects_client(mock_dests, mock_restore, monkeypatch):
+    fake = DisconnectedFakeClient()
+    monkeypatch.setattr(main_mod, "create_client", lambda cfg: fake)
+    out = main_mod._restore_from_telegram({}, dict(SCAN_ITEMS[0]))
+    assert out == "C:/ok/Film A.mp4"
+    assert fake.calls[0] == "connect"
+    assert fake.calls[-1] == "disconnect"
+
+
 @patch("src.main.questionary.press_any_key_to_continue")
 @patch("src.main.scan_with_spinner", return_value=SCAN_ITEMS)
 @patch("src.main.require_telegram_ready", return_value=True)
@@ -214,11 +266,14 @@ def test_manual_backup_calls_upload_per_selection(tmp_path, monkeypatch):
     uploads = []
 
     def fake_upload(client, path, subs, meta, dests, progress_callback=None):
+        if not client._connected:
+            raise RuntimeError("Cannot send requests while disconnected")
         uploads.append((path, meta))
         return {"video_msg_ids": [1], "sub_msg_ids": [], "forwarded_to": []}
 
     monkeypatch.setattr(main_mod, "upload_backup", fake_upload)
-    monkeypatch.setattr(main_mod, "create_client", lambda cfg: MagicMock())
+    fake_client = DisconnectedFakeClient()
+    monkeypatch.setattr(main_mod, "create_client", lambda cfg: fake_client)
 
     with patch("src.main.questionary.checkbox") as mock_check, \
          patch("src.main.questionary.press_any_key_to_continue"):
@@ -227,6 +282,8 @@ def test_manual_backup_calls_upload_per_selection(tmp_path, monkeypatch):
 
     assert len(uploads) == 1
     assert uploads[0][0] == str(real_file)
+    assert fake_client.calls[0] == "connect"
+    assert fake_client.calls[-1] == "disconnect"
 
 
 def test_delete_local_requires_typed_confirmation_for_unbacked(tmp_path, monkeypatch):
