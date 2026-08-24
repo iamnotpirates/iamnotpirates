@@ -16,7 +16,8 @@ from src.video_extractor import extract_video_sources
 @patch("src.main.init_db")
 @patch("src.main.load_config")
 @patch("src.main.questionary.select")
-def test_main_calls_ensure_playwright(mock_select, mock_load, mock_init, mock_binary, mock_ffmpeg, mock_pw):
+def test_main_calls_ensure_playwright(mock_select, mock_load, mock_init, mock_binary, mock_ffmpeg, mock_pw, monkeypatch):
+    monkeypatch.setattr("sys.argv", ["iamnotpirates"])
     mock_load.return_value = {
         "active_url": "https://z2.idlixku.com/",
         "target_urls": [{"id": 1, "name": "IDLIX", "url": "https://z2.idlixku.com/"}],

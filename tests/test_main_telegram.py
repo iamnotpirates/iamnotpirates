@@ -47,9 +47,11 @@ def test_handle_telegram_menu_back_immediately(mock_select, mock_press):
 @patch("src.main.handle_telegram_menu")
 def test_main_routes_option_nine_then_exit(
     mock_tg, _init_db, _header, _gbp, _gfp, _chrom, _eb, _ef, _ep, _lc,
-    mock_select
+    mock_select, monkeypatch
 ):
     from src.main import main as main_fn
+
+    monkeypatch.setattr("sys.argv", ["iamnotpirates"])
 
     mock_select.return_value = MagicMock(ask=MagicMock(side_effect=[
         "9. 📡 Telegram Backup / Kelola Backup Telegram",

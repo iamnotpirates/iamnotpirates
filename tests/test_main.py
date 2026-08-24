@@ -1,4 +1,5 @@
 import os
+import sys
 import pytest
 from unittest.mock import patch, MagicMock
 from src.config_manager import load_config, save_config, set_active_url
@@ -248,7 +249,8 @@ def test_handle_manage_urls_delete(mock_delete, mock_load, mock_select):
 @patch("src.main.questionary.select")
 @patch("src.main.print_header")
 @patch("src.main.load_config")
-def test_main_exit(mock_load, mock_header, mock_select, mock_ensure):
+def test_main_exit(mock_load, mock_header, mock_select, mock_ensure, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["iamnotpirates"])
     mock_load.return_value = {
         "active_url": "https://z2.idlixku.com/",
         "target_urls": [
