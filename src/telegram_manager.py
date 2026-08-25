@@ -23,6 +23,12 @@ def build_caption(meta: dict) -> str:
     year = meta.get("year")
     if year and year != "N/A":
         title_line += f" ({year})"
+    if meta.get("media_type") == "episode":
+        season = meta.get("season")
+        episode = meta.get("episode")
+        se = "S" + (f"{int(season):02d}" if season is not None else "??")
+        se += "E" + (f"{int(episode):02d}" if episode is not None else "??")
+        title_line += f" {se}"
     kind = meta.get("kind", "")
     if kind == "subtitle":
         title_line = f"💬 {meta.get('filename', '')}"
@@ -449,6 +455,36 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
         cleanup_parts(part_files)
         if unique_tmp_dir is not None:
             shutil.rmtree(unique_tmp_dir, ignore_errors=True)
+
+
+TEST_MESSAGE = "✅ iamnotpirates — tes tujuan backup (boleh dihapus)"
+
+
+def format_destination(dest: dict) -> str:
+    if dest["type"] == "saved":
+        return "saved"
+    base = f"{dest['type']}:{dest['target']}"
+    return f"{base}:{dest['topic']}" if dest.get("topic") else base
+
+
+def test_destinations(client, destinations: list) -> list:
+    results = []
+    for dest in destinations:
+        entry = {"destination": format_destination(dest), "ok": False, "detail": ""}
+        try:
+            target = resolve_target(client, dest["target"])
+            title = (getattr(target, "title", None)
+                     or getattr(target, "username", None) or str(target))
+            kwargs = {}
+            if dest.get("topic"):
+                kwargs["reply_to"] = int(dest["topic"])
+            msg = client.send_message(target, TEST_MESSAGE, **kwargs)
+            entry["ok"] = True
+            entry["detail"] = f"{title} · msg_id={getattr(msg, 'id', '?')}"
+        except Exception as exc:
+            entry["detail"] = str(exc)
+        results.append(entry)
+    return results
 
 
 def collect_local_entries() -> list:

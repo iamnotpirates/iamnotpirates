@@ -469,3 +469,21 @@ def test_settings_has_no_separate_scan_dirs_option(mock_text, mock_select, mock_
     labels = [c.kwargs.get("choices", []) for c in mock_select.call_args_list]
     flat = [c for group in labels for c in group]
     assert not any("Folder Scan" in str(c) for c in flat)
+
+
+@patch("src.main._connected_client")
+@patch("src.main.tg_disconnect")
+@patch("src.main.test_destinations")
+@patch("src.main.get_destinations", return_value=[{"type": "group", "target": "-100123", "topic": "7"}])
+def test_settings_test_destinations_action(mock_dests, mock_test, _disc, _conn, capsys):
+    mock_test.return_value = [{"destination": "group:-100123:7", "ok": True,
+                               "detail": "MyGroup · msg_id=1"}]
+    answers = iter(["🧪 Test Tujuan Backup", "⬅ Kembali / Back"])
+    from unittest.mock import patch as _p
+    with _p("src.main.questionary.select") as mock_select, \
+         _p("src.main.load_config", return_value={}):
+        mock_select.return_value.ask.side_effect = lambda: next(answers)
+        from src.main import handle_telegram_settings
+        handle_telegram_settings({})
+    assert mock_test.called
+    assert mock_test.call_args[0][1] == [{"type": "group", "target": "-100123", "topic": "7"}]

@@ -24,7 +24,7 @@ from src.telegram_manager import (
     get_destinations, scan_backups, upload_backup, restore_backup,
     collect_local_entries, mark_backed_entries, matches_query,
     tg_connect, tg_disconnect, parse_destination_input,
-    merge_local_entries, collect_folder_entries,
+    merge_local_entries, collect_folder_entries, test_destinations,
 )
 from src.video_extractor import extract_video_sources
 from src.downloader import (
@@ -1087,6 +1087,7 @@ def handle_telegram_settings(config: dict) -> None:
                 "🔑 Isi Ulang API ID / Hash",
                 "📢 Set Channel Tujuan / Set Target Channel",
                 "🎯 Ubah Tujuan Backup (Saved/Channel/Group/Topik)",
+                "🧪 Test Tujuan Backup",
                 "🤖 Toggle Auto-Backup",
                 "🚪 Logout (hapus session)",
                 "⬅ Kembali / Back",
@@ -1123,6 +1124,23 @@ def handle_telegram_settings(config: dict) -> None:
                 print_success(f"Tujuan backup: {tokens}")
                 console.print("[yellow]Catatan: group dengan topik di-upload ulang "
                               "(forward Telegram tidak bisa menentukan topik).[/yellow]")
+        elif action == "🧪 Test Tujuan Backup":
+            dests = get_destinations(fresh)
+            if not dests:
+                print_error("Tujuan backup belum diatur. Pakai 'Ubah Tujuan Backup' dulu.")
+            else:
+                client = _connected_client(config)
+                try:
+                    results = test_destinations(client, dests)
+                finally:
+                    tg_disconnect(client)
+                for res in results:
+                    mark = "[green]✓[/green]" if res["ok"] else "[red]✗[/red]"
+                    console.print(f" {mark} {res['destination']} — {res['detail']}")
+                console.print(
+                    "[dim]Cara verifikasi: klik kanan pesan tes di Telegram → Copy Message Link. "
+                    "Format: t.me/c/<ID_TANPA_-100>/<TOPIC>/<MSG> → "
+                    "tujuan group = -100<ID>, topik = <TOPIC>.[/dim]")
         elif action == "🤖 Toggle Auto-Backup":
             new_val = "0" if fresh.get("tg_auto_backup") == "1" else "1"
             save_config_key("tg_auto_backup", new_val)

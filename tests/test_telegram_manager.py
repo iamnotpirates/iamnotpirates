@@ -763,3 +763,68 @@ def test_merge_local_entries_log_wins_on_same_key():
     assert titles == ["Film A", "Film B"]
     film_a = [e for e in merged if e["title"] == "Film A"][0]
     assert film_a["output_path"] == "/log/a.mp4"
+
+
+def test_build_caption_episode_includes_season_episode():
+    from src.telegram_manager import build_caption
+    cap = build_caption({"kind": "video", "title": "Monster", "year": "2023",
+                         "media_type": "episode", "season": 1, "episode": 5,
+                         "file_size": 100, "part_count": 1, "subtitles": []})
+    assert cap.startswith("🎬 Monster (2023) S01E05")
+    assert '"kind": "video"' in cap
+
+
+def test_build_caption_movie_unchanged():
+    from src.telegram_manager import build_caption
+    cap = build_caption({"kind": "video", "title": "Film A", "year": "2024",
+                         "media_type": "movie", "season": None, "episode": None,
+                         "file_size": 1, "part_count": 1, "subtitles": []})
+    assert cap.startswith("🎬 Film A (2024)")
+    assert "S0" not in cap.split("\n")[0]
+
+
+class TestDestFakeClient:
+    def __init__(self):
+        self.sent = []
+        self._entities = {}
+
+    def get_entity(self, target):
+        if target not in self._entities:
+            self._entities[target] = type("E", (), {"title": f"Entity-{target}"})()
+        return self._entities[target]
+
+    def send_message(self, target, text, reply_to=None):
+        self.sent.append((target, text, reply_to))
+        class M:
+            id = 777
+        return M()
+
+
+def test_test_destinations_reports_each_and_sends_topic_reply():
+    import src.telegram_manager as tm
+    client = TestDestFakeClient()
+    dests = [
+        {"type": "group", "target": "-100123", "topic": "7"},
+        {"type": "saved", "target": "me", "topic": None},
+    ]
+    results = tm.test_destinations(client, dests)
+    assert [r["ok"] for r in results] == [True, True]
+    assert results[0]["detail"].startswith("Entity--100123")
+    assert "777" in results[0]["detail"]
+    assert client.sent[0] == (client.get_entity(-100123), tm.TEST_MESSAGE, 7)
+    assert client.sent[1][2] is None
+
+
+def test_test_destinations_captures_failure():
+    import src.telegram_manager as tm
+    client = TestDestFakeClient()
+    def boom(*a, **k):
+        raise ValueError("Cannot find any entity corresponding to '-999'")
+    client.get_entity = boom
+
+    def boom_send(*a, **k):
+        raise ValueError("Cannot find any entity corresponding to '-999'")
+    client.send_message = boom_send
+    results = tm.test_destinations(client, [{"type": "channel", "target": "-999", "topic": None}])
+    assert results[0]["ok"] is False
+    assert "-999" in results[0]["detail"]
