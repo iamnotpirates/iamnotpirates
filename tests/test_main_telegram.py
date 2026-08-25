@@ -93,6 +93,26 @@ def test_settings_api_hash_uses_password_prompt(mock_text, mock_pw, mock_select,
     assert mock_text.call_count == 1
 
 
+@patch("src.main.save_config_key")
+@patch("src.main.load_config", return_value={})
+@patch("src.main.questionary.select")
+@patch("src.main.questionary.text")
+def test_settings_change_destination_menu_action(mock_text, mock_select, mock_load, mock_save):
+    answers = iter([
+        "🎯 Ubah Tujuan Backup (Saved/Channel/Group/Topik)",
+        "⬅ Kembali / Back",
+    ])
+    mock_select.return_value.ask.side_effect = lambda: next(answers)
+    mock_text.return_value = MagicMock(ask=MagicMock(return_value="saved, group:-100123:4"))
+
+    from src.main import handle_telegram_settings
+    handle_telegram_settings({})
+
+    saved = {call.args[0]: call.args[1] for call in mock_save.call_args_list}
+    assert "tg_destinations" in saved
+    assert saved["tg_destinations"] == '["saved", "group:-100123:4"]'
+
+
 SCAN_ITEMS = [
     {"title": "Film A", "year": "2024", "media_type": "movie", "season": None,
      "episode": None, "file_size": 10, "part_count": 1, "subtitles": [],

@@ -1085,7 +1085,7 @@ def handle_telegram_settings(config: dict) -> None:
             choices=[
                 "🔑 Isi Ulang API ID / Hash",
                 "📢 Set Channel Tujuan / Set Target Channel",
-                "🎯 Ubah Tujuan Backup (Saved/Channel)",
+                "🎯 Ubah Tujuan Backup (Saved/Channel/Group/Topik)",
                 "🤖 Toggle Auto-Backup",
                 "🚪 Logout (hapus session)",
                 "⬅ Kembali / Back",
