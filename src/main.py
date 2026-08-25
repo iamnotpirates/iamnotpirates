@@ -1112,7 +1112,9 @@ def handle_telegram_settings(config: dict) -> None:
                 save_config_key("tg_channel_id", channel.strip())
                 print_success("Channel disimpan. Pastikan Anda adalah admin/member channel tersebut.")
         elif action == "🎯 Ubah Tujuan Backup (Saved/Channel/Group/Topik)":
-            console.print("[dim]Format per tujuan (pisahkan koma/spasi):[/dim]")
+            console.print("[dim]Bisa paste langsung Copy Message Link dari Telegram:[/dim]")
+            console.print("[dim]  https://t.me/c/2312123164/10777/10778 → group -1002312123164, topik 10777[/dim]")
+            console.print("[dim]Atau format manual (pisahkan koma):[/dim]")
             console.print("[dim]  saved | channel:<id> | group:<id> | group:<id>:<topik>[/dim]")
             console.print("[dim]Contoh: saved, channel:@filmku, group:-100123456789:7[/dim]")
             raw = questionary.text(
@@ -1138,9 +1140,9 @@ def handle_telegram_settings(config: dict) -> None:
                     mark = "[green]✓[/green]" if res["ok"] else "[red]✗[/red]"
                     console.print(f" {mark} {res['destination']} — {res['detail']}")
                 console.print(
-                    "[dim]Cara verifikasi: klik kanan pesan tes di Telegram → Copy Message Link. "
-                    "Format: t.me/c/<ID_TANPA_-100>/<TOPIC>/<MSG> → "
-                    "tujuan group = -100<ID>, topik = <TOPIC>.[/dim]")
+                    "[dim]Verifikasi: klik kanan pesan tes → Copy Message Link. "
+                    "Contoh https://t.me/c/2312123164/10777/10778 berarti "
+                    "group -1002312123164 topik 10777 (segmen-2 = topik, segmen-3 = nomor pesan).[/dim]")
         elif action == "🤖 Toggle Auto-Backup":
             new_val = "0" if fresh.get("tg_auto_backup") == "1" else "1"
             save_config_key("tg_auto_backup", new_val)

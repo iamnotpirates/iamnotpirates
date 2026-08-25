@@ -151,7 +151,15 @@ def parse_destination_input(raw: str) -> list:
     valid = []
     for token in tokens:
         lowered = token.lower()
-        if lowered == "saved":
+        link = re.search(r"t\.me/c/(\d+)(?:/(\d+))?(?:/(\d+))?", lowered)
+        if link:
+            chat, second, third = link.group(1), link.group(2), link.group(3)
+            group_id = f"-100{chat}"
+            if third is not None and second is not None:
+                valid.append(f"group:{group_id}:{second}")
+            else:
+                valid.append(f"group:{group_id}")
+        elif lowered == "saved":
             valid.append("saved")
         elif lowered.startswith("channel:") and lowered[8:].strip():
             valid.append(f"channel:{token[8:].strip()}")

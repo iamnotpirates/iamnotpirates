@@ -828,3 +828,22 @@ def test_test_destinations_captures_failure():
     results = tm.test_destinations(client, [{"type": "channel", "target": "-999", "topic": None}])
     assert results[0]["ok"] is False
     assert "-999" in results[0]["detail"]
+
+
+def test_parse_destination_accepts_full_tme_link_with_topic():
+    from src.telegram_manager import parse_destination_input
+    out = parse_destination_input("https://t.me/c/2312123164/10777/10778")
+    assert out == ["group:-1002312123164:10777"]
+
+
+def test_parse_destination_two_segment_link_has_no_topic():
+    from src.telegram_manager import parse_destination_input
+    out = parse_destination_input("https://t.me/c/2312123164/10778")
+    assert out == ["group:-1002312123164"]
+
+
+def test_parse_destination_mixed_tokens_and_links():
+    from src.telegram_manager import parse_destination_input
+    out = parse_destination_input(
+        "saved, t.me/c/2312123164/10777/10778, channel:@filmku")
+    assert out == ["saved", "group:-1002312123164:10777", "channel:@filmku"]
