@@ -270,10 +270,36 @@ def _document_name(msg) -> str:
     return ""
 
 
+def resolve_target(client, target):
+    if not target:
+        return "me"
+    if isinstance(target, str):
+        if target.lower() in ("me", "saved"):
+            return "me"
+        stripped = target.lstrip("-")
+        if stripped.isdigit():
+            target = int(target)
+    get_entity = getattr(client, "get_entity", None)
+    if get_entity is None:
+        return target
+    try:
+        return get_entity(target)
+    except (ValueError, TypeError):
+        get_dialogs = getattr(client, "get_dialogs", None)
+        if get_dialogs is not None:
+            try:
+                get_dialogs()
+                return get_entity(target)
+            except Exception:
+                pass
+        return target
+
+
 def scan_backups(client, destinations: list) -> list:
     items = []
     for destination in destinations:
-        target = destination["target"]
+        raw_target = destination["target"]
+        target = resolve_target(client, raw_target)
         current = None
         for msg in client.iter_messages(target, reverse=True, limit=None):
             if getattr(msg, "document", None) is None:
@@ -316,8 +342,8 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
     if not destinations:
         raise ValueError("Tujuan backup Telegram belum diatur.")
     primary = destinations[0]
-    primary_target = primary["target"]
-    primary_topic = primary.get("topic")
+    primary_target = resolve_target(client, primary["target"])
+    primary_topic = int(primary["topic"]) if primary.get("topic") and str(primary["topic"]).isdigit() else primary.get("topic")
     size = os.path.getsize(file_path)
     part_count = math.ceil(size / PART_SIZE) if size > PART_SIZE else 1
     video_meta = {
@@ -389,14 +415,14 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
         forwarded_to = []
         all_primary_ids = video_msg_ids + sub_msg_ids
         for destination in destinations[1:]:
-            target = destination["target"]
-            topic = destination.get("topic")
+            target = resolve_target(client, destination["target"])
+            topic = int(destination["topic"]) if destination.get("topic") and str(destination["topic"]).isdigit() else destination.get("topic")
             if topic is not None:
                 _send_video(target, topic, record=False)
                 _send_subs(target, topic)
             else:
                 client.forward_messages(target, all_primary_ids, primary_target)
-                forwarded_to.append(target)
+                forwarded_to.append(destination["target"])
 
         return {"video_msg_ids": video_msg_ids, "sub_msg_ids": sub_msg_ids, "forwarded_to": forwarded_to}
     finally:
@@ -471,7 +497,8 @@ def restore_backup(client, item: dict, config: dict, progress_callback=None) -> 
     target_dir, filename = build_restore_target(config, item)
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
-    chat = item.get("chat", "me")
+    chat_raw = item.get("chat", "me")
+    chat = resolve_target(client, chat_raw)
 
     messages = client.get_messages(chat, ids=list(item["video_msg_ids"]))
     part_files = []

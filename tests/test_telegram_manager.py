@@ -668,3 +668,20 @@ def test_tg_connect_and_disconnect_sync():
     assert client.connected is True
     assert tg_disconnect(client) is True
     assert client.connected is False
+
+
+def test_resolve_target_numeric_string_fetches_dialogs_if_unseen():
+    from src.telegram_manager import resolve_target
+    client = MagicMock()
+    client.get_entity.side_effect = [ValueError("Cannot find any entity corresponding to -1002312123164"), "EntityObj"]
+    res = resolve_target(client, "-1002312123164")
+    assert res == "EntityObj"
+    assert client.get_entity.call_args_list[0][0][0] == -1002312123164
+    assert client.get_dialogs.called
+
+
+def test_resolve_target_saved_returns_me():
+    from src.telegram_manager import resolve_target
+    client = MagicMock()
+    assert resolve_target(client, "saved") == "me"
+    assert resolve_target(client, "me") == "me"
