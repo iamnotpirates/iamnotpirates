@@ -495,6 +495,81 @@ def mark_backed_entries(local_entries: list, scanned_items: list) -> list:
     return marked
 
 
+VIDEO_EXTS = {".mp4", ".mkv", ".avi", ".webm", ".mov"}
+_SE_EP_RE = re.compile(r"\b[Ss](\d{1,2})\s?[Ee](\d{1,3})\b")
+_YEAR_RE = re.compile(r"\b(19\d\d|20\d\d)\b")
+
+
+def parse_media_filename(path: str) -> Optional[dict]:
+    if os.path.splitext(os.path.basename(path))[1].lower() not in VIDEO_EXTS:
+        return None
+    stem = os.path.splitext(os.path.basename(path))[0]
+    se = _SE_EP_RE.search(stem)
+    year = ""
+    if se:
+        title_part = stem[:se.start()]
+        media_type = "episode"
+        season, episode = int(se.group(1)), int(se.group(2))
+    else:
+        ym = _YEAR_RE.search(stem)
+        if ym:
+            title_part = stem[:ym.start()]
+            year = ym.group(1)
+        else:
+            title_part = stem
+        media_type = "movie"
+        season = episode = None
+    if not year:
+        parent = os.path.dirname(path)
+        for ancestor in (parent, os.path.dirname(parent)):
+            parent_year = _YEAR_RE.search(os.path.basename(ancestor))
+            if parent_year:
+                year = parent_year.group(1)
+                break
+    title = re.sub(r"[\s._\-–(]+$", "", title_part).replace(".", " ").strip()
+    title = re.sub(r"\s{2,}", " ", title)
+    if not title:
+        return None
+    return {"title": title, "year": year, "media_type": media_type,
+            "season": season, "episode": episode}
+
+
+def collect_folder_entries(scan_dirs: list) -> list:
+    best = {}
+    for scan_dir in scan_dirs or []:
+        if not os.path.isdir(scan_dir):
+            continue
+        for root, _dirs, files in os.walk(scan_dir):
+            depth = os.path.relpath(root, scan_dir).count(os.sep)
+            if depth > 3:
+                _dirs[:] = []
+                continue
+            for fname in files:
+                if os.path.splitext(fname)[1].lower() not in VIDEO_EXTS:
+                    continue
+                full = os.path.join(root, fname)
+                meta = parse_media_filename(full)
+                if meta is None:
+                    continue
+                try:
+                    size = os.path.getsize(full)
+                except OSError:
+                    continue
+                key = backup_key(meta["title"], meta["year"], meta["season"], meta["episode"])
+                candidate = dict(meta, output_path=full, file_size=size,
+                                 backed=False, key=key)
+                if key not in best or size > best[key]["file_size"]:
+                    best[key] = candidate
+    return list(best.values())
+
+
+def merge_local_entries(log_entries: list, folder_entries: list) -> list:
+    merged = {e.get("key"): dict(e) for e in log_entries}
+    for entry in folder_entries:
+        merged.setdefault(entry.get("key"), dict(entry))
+    return list(merged.values())
+
+
 def build_restore_target(config: dict, item: dict) -> tuple:
     from src.config_manager import get_download_dir
     from src.downloader import format_tv_paths

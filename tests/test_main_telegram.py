@@ -434,3 +434,38 @@ def test_auto_backup_swallows_errors(tmp_path):
          patch.object(main_mod, "create_client", lambda cfg: MagicMock()), \
          patch.object(main_mod, "upload_backup", side_effect=RuntimeError("boom")):
         main_mod.maybe_auto_backup(str(video), {"tg_auto_backup": "1"}, "Boom", "2024", "movie")
+
+
+@patch("src.main.mark_backed_entries")
+@patch("src.main.scan_with_spinner", return_value=[])
+@patch("src.main.merge_local_entries")
+@patch("src.main.collect_folder_entries")
+@patch("src.main.collect_local_entries")
+def test_listing_includes_folder_entries(mock_log, mock_folder, mock_merge, _scan, _mark):
+    from src.main import _local_listing_with_backup_status
+    mock_log.return_value = [{"title": "FromLog"}]
+    mock_folder.return_value = [{"title": "FromFolder"}]
+    merged_list = [{"title": "Merged"}]
+    mock_merge.return_value = merged_list
+    _mark.side_effect = lambda entries, scanned: entries
+    result = _local_listing_with_backup_status({"scan_dirs": ["/movies"]})
+    mock_folder.assert_called_once_with(["/movies"])
+    mock_merge.assert_called_once()
+    assert result == merged_list
+
+
+@patch("src.main.save_config_key")
+@patch("src.main.load_config", return_value={})
+@patch("src.main.questionary.select")
+@patch("src.main.questionary.text")
+def test_settings_scan_dirs_menu_action(mock_text, mock_select, mock_load, mock_save):
+    answers = iter([
+        "📂 Set Folder Scan Backup",
+        "⬅ Kembali / Back",
+    ])
+    mock_select.return_value.ask.side_effect = lambda: next(answers)
+    mock_text.return_value = MagicMock(ask=MagicMock(return_value="Z:\\Film\\Movies, D:\\Series"))
+    from src.main import handle_telegram_settings
+    handle_telegram_settings({})
+    saved = {call.args[0]: call.args[1] for call in mock_save.call_args_list}
+    assert "scan_dirs" in saved

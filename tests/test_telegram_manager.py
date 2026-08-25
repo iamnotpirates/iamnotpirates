@@ -697,3 +697,69 @@ def test_resolve_target_saved_returns_me():
     client = MagicMock()
     assert resolve_target(client, "saved") == "me"
     assert resolve_target(client, "me") == "me"
+
+
+def test_parse_media_filename_movie():
+    from src.telegram_manager import parse_media_filename
+    meta = parse_media_filename(r"Z:\Film\Movies\The Wolf of Wall Street (2013)\The Wolf of Wall Street (2013).mp4")
+    assert meta == {"title": "The Wolf of Wall Street", "year": "2013",
+                    "media_type": "movie", "season": None, "episode": None}
+
+
+def test_parse_media_filename_episode():
+    from src.telegram_manager import parse_media_filename
+    meta = parse_media_filename(
+        r"Z:\Film\Series\Breaking Bad (2008)\Season 02\Breaking Bad - S02E05.mp4")
+    assert meta["title"] == "Breaking Bad"
+    assert meta["year"] == "2008"
+    assert meta["media_type"] == "episode"
+    assert meta["season"] == 2
+    assert meta["episode"] == 5
+
+
+def test_parse_media_filename_no_year_returns_none_title():
+    from src.telegram_manager import parse_media_filename
+    assert parse_media_filename("random.txt") is None
+    meta = parse_media_filename("Some Movie.mp4")
+    assert meta is not None
+    assert meta["title"] == "Some Movie"
+    assert meta["year"] == ""
+
+
+def test_collect_folder_entries_walks_and_dedupes_largest(tmp_path):
+    from src.telegram_manager import collect_folder_entries
+    movie_dir = tmp_path / "The Wolf of Wall Street (2013)"
+    movie_dir.mkdir()
+    (movie_dir / "The Wolf of Wall Street (2013).mp4").write_bytes(b"x" * 500)
+    (movie_dir / "sample.mp4").write_bytes(b"x" * 10)
+    series_dir = tmp_path / "Breaking Bad (2008)" / "Season 01"
+    series_dir.mkdir(parents=True)
+    (series_dir / "Breaking Bad - S01E01.mkv").write_bytes(b"x" * 100)
+
+    entries = collect_folder_entries([str(tmp_path)])
+    by_title = {e["title"]: e for e in entries}
+    wolf = by_title["The Wolf of Wall Street"]
+    assert wolf["file_size"] == 500
+    assert wolf["media_type"] == "movie"
+    assert wolf["key"]
+    ep = by_title["Breaking Bad"]
+    assert ep["media_type"] == "episode"
+    assert (ep["season"], ep["episode"]) == (1, 1)
+
+
+def test_merge_local_entries_log_wins_on_same_key():
+    from src.telegram_manager import merge_local_entries
+    log_e = [{"title": "Film A", "year": "2024", "media_type": "movie",
+              "season": None, "episode": None, "output_path": "/log/a.mp4",
+              "file_size": 1, "backed": False, "key": "film-a"}]
+    folder_e = [{"title": "Film A", "year": "2024", "media_type": "movie",
+                 "season": None, "episode": None, "output_path": "/folder/a.mp4",
+                 "file_size": 9, "backed": False, "key": "film-a"},
+                {"title": "Film B", "year": "", "media_type": "movie",
+                 "season": None, "episode": None, "output_path": "/folder/b.mp4",
+                 "file_size": 5, "backed": False, "key": "film-b"}]
+    merged = merge_local_entries(log_e, folder_e)
+    titles = sorted(e["title"] for e in merged)
+    assert titles == ["Film A", "Film B"]
+    film_a = [e for e in merged if e["title"] == "Film A"][0]
+    assert film_a["output_path"] == "/log/a.mp4"
