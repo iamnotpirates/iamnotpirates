@@ -9,6 +9,7 @@ import time
 from typing import Optional
 
 from src.db_manager import save_config_key
+from src.sevenzip_manager import ensure_7z, compress_archive, extract_archive
 
 TELEGRAM_DIR = os.path.join(os.path.expanduser("~"), ".iamnotpirates", "telegram")
 SESSION_PATH = os.path.join(TELEGRAM_DIR, "session")
@@ -378,7 +379,34 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
     primary = destinations[0]
     primary_target = resolve_target(client, primary["target"])
     primary_topic = int(primary["topic"]) if primary.get("topic") and str(primary["topic"]).isdigit() else primary.get("topic")
-    size = os.path.getsize(file_path)
+
+    def _archive_base(meta: dict) -> str:
+        base = meta.get("title", "backup")
+        year = str(meta.get("year") or "").strip()
+        if year and year != "N/A":
+            base += f" ({year})"
+        if meta.get("media_type") == "episode":
+            season, episode = meta.get("season"), meta.get("episode")
+            se = "S" + (f"{int(season):02d}" if season is not None else "??")
+            se += "E" + (f"{int(episode):02d}" if episode is not None else "??")
+            base += f" {se}"
+        return re.sub(r'[<>:"/\\|?*]', "_", base)
+
+    staging_dir = tmp_dir
+    unique_tmp_dir = None
+    if staging_dir is None:
+        os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
+        staging_dir = tempfile.mkdtemp(prefix="up_", dir=TMP_SPLIT_DIR)
+        unique_tmp_dir = staging_dir
+    os.makedirs(staging_dir, exist_ok=True)
+    sz_path = ensure_7z()
+    if not sz_path:
+        raise RuntimeError("7zr tidak tersedia; gagal menyiapkan arsip backup.")
+    archive_name = _archive_base(meta) + ".7z"
+    archive_path = os.path.join(staging_dir, archive_name)
+    compress_archive(sz_path, archive_path, [file_path] + list(sub_paths))
+
+    size = os.path.getsize(archive_path)
     part_count = math.ceil(size / PART_SIZE) if size > PART_SIZE else 1
     video_meta = {
         "kind": "video",
@@ -390,28 +418,24 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
         "file_size": size,
         "part_count": part_count,
         "subtitles": [os.path.basename(p) for p in sub_paths],
+        "archive": True,
+        "filename": os.path.basename(file_path),
     }
     caption = build_caption(video_meta)
     video_msg_ids = []
     sub_msg_ids = []
     part_files = []
-    unique_tmp_dir = None
     try:
         if part_count > 1:
-            if tmp_dir is None:
-                os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
-                unique_tmp_dir = tempfile.mkdtemp(prefix="up_", dir=TMP_SPLIT_DIR)
-                split_dir = unique_tmp_dir
-            else:
-                split_dir = tmp_dir
-            part_files = split_file(file_path, part_size=PART_SIZE, tmp_dir=split_dir)
+            split_dir = staging_dir
+            part_files = split_file(archive_path, part_size=PART_SIZE, tmp_dir=split_dir)
 
         def _send_video(target, reply_to, record):
             ids = []
             if part_count == 1:
                 msg = _send_file_with_retry(
-                    client, target, file_path, caption=caption,
-                    force_document=False, supports_streaming=True,
+                    client, target, archive_path, caption=caption,
+                    force_document=True,
                     progress_callback=progress_callback, reply_to=reply_to,
                 )
                 ids.append(msg.id)
@@ -429,19 +453,7 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
             return ids
 
         def _send_subs(target, reply_to):
-            ids = []
-            for sub_path in sub_paths:
-                sub_meta = {
-                    "kind": "subtitle",
-                    "filename": os.path.basename(sub_path),
-                    "parent_title": video_meta["title"],
-                }
-                smsg = _send_file_with_retry(
-                    client, target, sub_path, caption=build_caption(sub_meta),
-                    force_document=True, reply_to=reply_to,
-                )
-                ids.append(smsg.id)
-            return ids
+            return []
 
         _send_video(primary_target, primary_topic, record=True)
         sub_msg_ids = _send_subs(primary_target, primary_topic)
@@ -461,9 +473,12 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
         return {"video_msg_ids": video_msg_ids, "sub_msg_ids": sub_msg_ids, "forwarded_to": forwarded_to}
     finally:
         cleanup_parts(part_files)
+        try:
+            os.remove(archive_path)
+        except OSError:
+            pass
         if unique_tmp_dir is not None:
             shutil.rmtree(unique_tmp_dir, ignore_errors=True)
-
 
 TEST_MESSAGE = "✅ iamnotpirates — tes tujuan backup (boleh dihapus)"
 
@@ -633,6 +648,8 @@ def build_restore_target(config: dict, item: dict) -> tuple:
 
 
 def restore_backup(client, item: dict, config: dict, progress_callback=None) -> str:
+    if item.get("archive"):
+        return restore_archive_backup(client, item, config, progress_callback)
     target_dir, filename = build_restore_target(config, item)
     os.makedirs(target_dir, exist_ok=True)
     os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
@@ -675,3 +692,48 @@ def restore_backup(client, item: dict, config: dict, progress_callback=None) -> 
             client.download_media(sub_message, file=target_dir)
 
     return output_path
+
+
+def restore_archive_backup(client, item: dict, config: dict, progress_callback=None) -> str:
+    """Restore an archive-based backup: merge parts, verify, extract via 7z."""
+    target_dir, _filename = build_restore_target(config, item)
+    os.makedirs(target_dir, exist_ok=True)
+    os.makedirs(TMP_SPLIT_DIR, exist_ok=True)
+    chat = resolve_target(client, item.get("chat", "me"))
+
+    messages = client.get_messages(chat, ids=list(item["video_msg_ids"]))
+    part_files = []
+    for message in messages:
+        downloaded = client.download_media(
+            message, file=TMP_SPLIT_DIR, progress_callback=progress_callback
+        )
+        part_files.append(downloaded)
+
+    merging_path = os.path.join(TMP_SPLIT_DIR,
+                                (item.get("filename") or "archive.7z") + ".merging")
+    merge_files(part_files, merging_path)
+
+    expected_size = item.get("file_size", 0)
+    actual_size = os.path.getsize(merging_path)
+    if actual_size != expected_size:
+        raise IOError(
+            f"Verifikasi ukuran arsip gagal untuk '{item.get('title', '?')}': "
+            f"diharapkan {expected_size}, didapat {actual_size}. "
+            f"Part sementara tetap disimpan di {TMP_SPLIT_DIR}."
+        )
+
+    sz_path = ensure_7z()
+    if not sz_path:
+        raise RuntimeError("7zr tidak tersedia; tidak bisa mengekstrak backup.")
+    extract_archive(sz_path, merging_path, target_dir)
+    os.remove(merging_path)
+    cleanup_parts(part_files)
+
+    video_name = item.get("filename") or ""
+    if video_name and os.path.exists(os.path.join(target_dir, video_name)):
+        return os.path.join(target_dir, video_name)
+    files = sorted(
+        (os.path.join(target_dir, f) for f in os.listdir(target_dir)),
+        key=os.path.getsize, reverse=True,
+    )
+    return files[0] if files else target_dir

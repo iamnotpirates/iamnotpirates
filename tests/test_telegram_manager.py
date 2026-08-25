@@ -403,15 +403,16 @@ META = {"title": "Film B", "year": "2025", "media_type": "movie",
 UPLOAD_DESTS = [{"type": "saved", "target": "me"}, {"type": "channel", "target": "@c"}]
 
 
-def test_upload_single_part_streams_and_forwards(tmp_path):
+def test_upload_single_part_sends_archive_document_and_forwards(tmp_path, monkeypatch):
+    _fake_archive(monkeypatch, 1000)
     src = _make_big_file(tmp_path, 1000)
     client = RecordingClient()
     result = upload_backup(client, src, [], dict(META), UPLOAD_DESTS)
     assert len(client.sent) == 1
     sent = client.sent[0]
-    assert sent["force_document"] is False
-    assert sent["supports_streaming"] is True
-    assert '"kind": "video"' in sent["caption"].replace("'", '"')
+    assert sent["force_document"] is True
+    assert sent["path"].endswith(".7z")
+    assert '"archive": true' in sent["caption"].replace("'", '"')
     assert '"part_count": 1' in sent["caption"].replace("'", '"')
     assert result["video_msg_ids"] == [101]
     assert result["forwarded_to"] == ["@c"]
@@ -424,6 +425,7 @@ def test_upload_multi_part_splits_captions_first_part_only_and_cleans_temp(monke
     src = _make_big_file(tmp_path, 2500)
     parts_dir = tmp_path / "parts"
     client = RecordingClient()
+    _fake_archive(monkeypatch, 2500)
     result = upload_backup(client, src, [], dict(META),
                            [UPLOAD_DESTS[0]], progress_callback=None, tmp_dir=str(parts_dir))
     assert len(client.sent) == 2
@@ -431,6 +433,7 @@ def test_upload_multi_part_splits_captions_first_part_only_and_cleans_temp(monke
     first_meta = json.loads(caps[0].split("```json")[1].strip().strip("`"))
     assert first_meta["part_count"] == 2
     assert first_meta["file_size"] == 2500
+    assert first_meta["archive"] is True
     assert caps[1] == ""
     assert all(s["force_document"] for s in client.sent)
     assert parts_dir.exists()
@@ -438,17 +441,16 @@ def test_upload_multi_part_splits_captions_first_part_only_and_cleans_temp(monke
     assert len(result["video_msg_ids"]) == 2
 
 
-def test_upload_subtitles_as_documents_with_marker_caption(tmp_path):
+def test_subs_included_in_archive_caption_not_sent_separately(tmp_path, monkeypatch):
+    _fake_archive(monkeypatch, 100)
     src = _make_big_file(tmp_path, 100)
-    sub = tmp_path / "Film B.id.srt"
-    sub.write_text("SUB")
+    sub_a = tmp_path / "Film B.id.srt"; sub_a.write_text("SUB")
+    sub_b = tmp_path / "Film B.eng.srt"; sub_b.write_text("SUB")
     client = RecordingClient()
-    upload_backup(client, src, [str(sub)], dict(META), [UPLOAD_DESTS[0]])
-    assert len(client.sent) == 2
-    sub_sent = client.sent[1]
-    assert sub_sent["force_document"] is True
-    assert '"kind": "subtitle"' in sub_sent["caption"].replace("'", '"')
-    assert "Film B.id.srt" in sub_sent["caption"]
+    upload_backup(client, src, [str(sub_a), str(sub_b)], dict(META), [UPLOAD_DESTS[0]])
+    assert len(client.sent) == 1
+    cap = client.sent[0]["caption"].replace("'", '"')
+    assert '"subtitles": ["Film B.id.srt", "Film B.eng.srt"]' in cap
 
 
 def test_auto_tmp_dir_created_and_removed(monkeypatch, tmp_path):
@@ -466,6 +468,7 @@ def test_auto_tmp_dir_created_and_removed(monkeypatch, tmp_path):
 
     monkeypatch.setattr(tm, "split_file", recording_split)
     src = _make_big_file(tmp_path, 2500)
+    _fake_archive(monkeypatch, 2500)
     client = RecordingClient()
     upload_backup(client, src, [], dict(META), [{"type": "saved", "target": "me"}])
     assert len(client.sent) == 2
@@ -482,17 +485,15 @@ FLEX_DESTS = [
 ]
 
 
-def test_upload_topic_destination_reuploads_with_reply_to(tmp_path):
+def test_upload_topic_destination_reuploads_with_reply_to(tmp_path, monkeypatch):
+    _fake_archive(monkeypatch, 100)
     src = _make_big_file(tmp_path, 100)
     sub = tmp_path / "Film B.id.srt"
     sub.write_text("SUB")
     client = RecordingClient()
     result = upload_backup(client, src, [str(sub)], dict(META), FLEX_DESTS)
 
-    assert [(s["target"], s["reply_to"]) for s in client.sent if s["path"].endswith(".mp4")] == [
-        ("me", None), ("-100t", 5),
-    ]
-    assert [(s["target"], s["reply_to"]) for s in client.sent if s["path"].endswith(".srt")] == [
+    assert [(s["target"], s["reply_to"]) for s in client.sent if s["path"].endswith(".7z")] == [
         ("me", None), ("-100t", 5),
     ]
     assert [(f[0], f[2]) for f in client.forwards] == [("@c", "me"), ("-100g", "me")]
@@ -500,7 +501,8 @@ def test_upload_topic_destination_reuploads_with_reply_to(tmp_path):
     assert "-100t" not in result["forwarded_to"]
 
 
-def test_upload_primary_topic_destination_sends_with_reply_to(tmp_path):
+def test_upload_primary_topic_destination_sends_with_reply_to(tmp_path, monkeypatch):
+    _fake_archive(monkeypatch, 100)
     src = _make_big_file(tmp_path, 100)
     client = RecordingClient()
     upload_backup(client, src, [], dict(META), [{"type": "group", "target": "-100t", "topic": 9}])
@@ -515,6 +517,7 @@ def test_upload_multi_part_topic_reuploads_all_parts(monkeypatch, tmp_path):
     src = _make_big_file(tmp_path, 2500)
     parts_dir = tmp_path / "parts"
     client = RecordingClient()
+    _fake_archive(monkeypatch, 2500)
     upload_backup(client, src, [], dict(META),
                   [{"type": "saved", "target": "me", "topic": None},
                    {"type": "group", "target": "-100t", "topic": 3}],
@@ -847,3 +850,129 @@ def test_parse_destination_mixed_tokens_and_links():
     out = parse_destination_input(
         "saved, t.me/c/2312123164/10777/10778, channel:@filmku")
     assert out == ["saved", "group:-1002312123164:10777", "channel:@filmku"]
+
+
+def test_sevenzip_paths_and_download(tmp_path, monkeypatch):
+    import src.sevenzip_manager as sz
+    monkeypatch.setattr(sz, "get_bin_dir", lambda: str(tmp_path))
+    class FakeResp:
+        status_code = 200
+        content = b"FAKE-EXE-BYTES"
+    monkeypatch.setattr(sz.requests, "get", lambda url, **k: FakeResp())
+    path = sz.ensure_7z(None)
+    assert path is not None and os.path.exists(path)
+    with open(path, "rb") as fh:
+        assert fh.read() == b"FAKE-EXE-BYTES"
+    # second call served from cache (no second request)
+    def boom(url, **k):
+        raise AssertionError("should not re-download")
+    monkeypatch.setattr(sz.requests, "get", boom)
+    assert sz.ensure_7z(None) == path
+
+
+def test_compress_archive_runs_7z_add_from_video_dir(tmp_path, monkeypatch):
+    import src.sevenzip_manager as sz
+    vid = tmp_path / "Monster S01E05.mkv"; vid.write_bytes(b"v" * 10)
+    srt = tmp_path / "Monster S01E05.id.srt"; srt.write_bytes(b"s")
+    calls = {}
+    def fake_run(cmd, cwd=None, check=False, capture_output=True, text=False):
+        calls["cmd"] = cmd; calls["cwd"] = cwd
+        return MagicMock(returncode=0)
+    monkeypatch.setattr(sz.subprocess, "run", fake_run)
+    out = tmp_path / "out.7z"
+    open(out, "wb").close()
+    sz.compress_archive("C:/bin/7zr.exe", str(out), [str(vid), str(srt)])
+    cmd = calls["cmd"]
+    assert cmd[0] == "C:/bin/7zr.exe"
+    assert cmd[1] == "a" and "-mx=0" in cmd and str(out) in cmd
+    assert os.path.basename(str(vid)) in cmd and os.path.basename(str(srt)) in cmd
+    assert calls["cwd"] == str(tmp_path)
+
+
+def test_extract_archive_runs_7z_x_to_dest(tmp_path, monkeypatch):
+    import src.sevenzip_manager as sz
+    calls = {}
+    def fake_run(cmd, cwd=None, check=False, capture_output=True, text=False):
+        calls["cmd"] = cmd
+        return MagicMock(returncode=0)
+    monkeypatch.setattr(sz.subprocess, "run", fake_run)
+    arc = tmp_path / "a.7z"; arc.write_bytes(b"x")
+    dest = tmp_path / "dest"
+    sz.extract_archive("C:/bin/7zr.exe", str(arc), str(dest))
+    cmd = calls["cmd"]
+    assert cmd[1] == "x" and any(str(dest) in c for c in cmd)
+
+
+def _fake_archive(monkeypatch, size_bytes):
+    import src.telegram_manager as tm
+    monkeypatch.setattr(tm, "ensure_7z", lambda console=None: "C:/bin/7zr.exe")
+
+    def fake_compress(sevenzip, archive_path, files):
+        with open(archive_path, "wb") as fh:
+            fh.write(b"A" * size_bytes)
+    monkeypatch.setattr(tm, "compress_archive", fake_compress)
+
+
+def test_upload_backup_archives_video_with_all_subs(monkeypatch, tmp_path):
+    from src.telegram_manager import upload_backup
+    src = tmp_path / "Monster S01E05.mkv"; src.write_bytes(b"v" * 50)
+    subs = []
+    for name in ("a.id.srt", "b.eng.srt", "c.french.srt"):
+        p = tmp_path / name; p.write_bytes(b"s"); subs.append(str(p))
+    client = RecordingClient()
+    _fake_archive(monkeypatch, 100)
+    res = upload_backup(client, str(src), subs,
+                        {"title": "Monster", "year": "2023", "media_type": "episode",
+                         "season": 1, "episode": 5},
+                        [{"type": "saved", "target": "me", "topic": None}])
+    assert len(client.sent) == 1
+    sent = client.sent[0]
+    assert sent["path"].endswith(".7z")
+    assert sent["force_document"] is True
+    assert '"archive": true' in sent["caption"]
+    assert '"filename": "Monster S01E05.mkv"' in sent["caption"]
+    for s in subs:
+        assert os.path.basename(s) in sent["caption"]
+    assert res["video_msg_ids"] == [101]
+
+
+def test_upload_backup_splits_big_archive(monkeypatch, tmp_path):
+    from src.telegram_manager import upload_backup
+    monkeypatch.setattr("src.telegram_manager.PART_SIZE", 1300)
+    src = tmp_path / "Big Film (2024).mkv"; src.write_bytes(b"v" * 3000)
+    client = RecordingClient()
+    _fake_archive(monkeypatch, 2500)
+    upload_backup(client, str(src), [],
+                  {"title": "Big Film", "year": "2024", "media_type": "movie"},
+                  [{"type": "saved", "target": "me", "topic": None}])
+    assert len(client.sent) == 2
+    assert all(s["force_document"] is True for s in client.sent)
+    assert '"archive": true' in client.sent[0]["caption"]
+
+
+def test_restore_archive_extracts_and_returns_video(monkeypatch, tmp_path):
+    import src.telegram_manager as tm
+    extracted = {}
+    def fake_extract(sz_path, archive, dest):
+        extracted["args"] = (sz_path, archive, dest)
+        video = os.path.join(dest, "Monster S01E05.mkv")
+        open(video, "wb").write(b"video-bytes")
+        return video
+    monkeypatch.setattr(tm, "extract_archive", fake_extract)
+    monkeypatch.setattr(tm, "ensure_7z", lambda console=None: "C:/bin/7zr.exe")
+
+    class ArcClient:
+        def get_messages(self, chat, ids): return [MagicMock()]
+        def download_media(self, message, file=None, progress_callback=None):
+            p = os.path.join(file, "part.001")
+            open(p, "wb").write(b"data")
+            return p
+    cfg = {"download_dir_movie": str(tmp_path / "Movies"),
+           "download_dir_series": str(tmp_path / "Series")}
+    item = {"title": "Monster", "year": "2023", "media_type": "episode",
+            "season": 1, "episode": 5, "file_size": 4,
+            "video_msg_ids": [1], "sub_msg_ids": [], "chat": "me",
+            "archive": True, "filename": "Monster S01E05.mkv"}
+    out = tm.restore_backup(ArcClient(), item, cfg)
+    assert out.endswith(os.path.join("Season 01", "Monster S01E05.mkv")) or out.endswith("Monster S01E05.mkv")
+    assert extracted["args"][2] == os.path.dirname(out)

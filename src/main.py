@@ -1343,7 +1343,7 @@ def handle_telegram_manual_backup(config: dict) -> None:
             sub_paths = [
                 os.path.join(sub_dir, name)
                 for name in sorted(os.listdir(sub_dir))
-                if name.lower().endswith(".srt") and os.path.splitext(name)[0].startswith(os.path.splitext(os.path.basename(entry["output_path"]))[0])
+                if name.lower().endswith(".srt")
             ]
             meta = {
                 "title": entry["title"], "year": entry["year"],
