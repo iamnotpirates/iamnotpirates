@@ -122,11 +122,11 @@ def is_logged_in() -> bool:
 
 
 def tg_connect(client):
-    return client.loop.run_until_complete(client.connect())
+    return client.connect()
 
 
 def tg_disconnect(client):
-    return client.loop.run_until_complete(client.disconnect())
+    return client.disconnect()
 
 
 def logout_session() -> None:
@@ -188,7 +188,7 @@ def get_destinations(config: dict) -> list:
 
 def ensure_telethon(console) -> bool:
     try:
-        import telethon
+        import telethon.sync
         return True
     except ImportError:
         console.print("[yellow]Library 'telethon' belum terinstall.[/yellow]")
@@ -200,7 +200,7 @@ def ensure_telethon(console) -> bool:
             except OSError:
                 pass
             try:
-                import telethon
+                import telethon.sync
                 return True
             except ImportError:
                 pass
@@ -210,6 +210,10 @@ def ensure_telethon(console) -> bool:
 
 
 def create_client(config: dict):
+    try:
+        import telethon.sync
+    except ImportError:
+        pass
     from telethon import TelegramClient
     return TelegramClient(
         SESSION_PATH,

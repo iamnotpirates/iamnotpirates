@@ -127,22 +127,16 @@ class DisconnectedFakeClient:
     def __init__(self):
         self.calls = []
         self._connected = False
-        self.loop = self
-
-    def run_until_complete(self, coro):
-        if coro == "coro-connect":
-            self._connected = True
-            self.calls.append("connect")
-        elif coro == "coro-disconnect":
-            self.calls.append("disconnect")
-            self._connected = False
-        return coro
 
     def connect(self):
-        return "coro-connect"
+        self._connected = True
+        self.calls.append("connect")
+        return True
 
     def disconnect(self):
-        return "coro-disconnect"
+        self.calls.append("disconnect")
+        self._connected = False
+        return True
 
     def is_user_authorized(self):
         return True
