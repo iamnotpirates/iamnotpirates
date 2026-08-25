@@ -5,6 +5,7 @@ import re
 import shutil
 import subprocess
 import tempfile
+import time
 from typing import Optional
 
 from src.db_manager import save_config_key
@@ -219,7 +220,26 @@ def create_client(config: dict):
         SESSION_PATH,
         int(config["tg_api_id"]),
         config["tg_api_hash"],
+        connection_retries=10,
+        retry_delay=2,
+        auto_reconnect=True,
     )
+
+
+def _send_file_with_retry(client, target, file_to_send, max_retries: int = 3, **kwargs):
+    for attempt in range(1, max_retries + 1):
+        try:
+            return client.send_file(target, file_to_send, **kwargs)
+        except (OSError, ConnectionError, Exception):
+            if attempt >= max_retries:
+                raise
+            time.sleep(1 * attempt)
+            is_conn = getattr(client, "is_connected", None)
+            if is_conn and not is_conn():
+                try:
+                    tg_connect(client)
+                except Exception:
+                    pass
 
 
 def login_flow(console, config: dict) -> bool:
@@ -375,16 +395,16 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
         def _send_video(target, reply_to, record):
             ids = []
             if part_count == 1:
-                msg = client.send_file(
-                    target, file_path, caption=caption,
+                msg = _send_file_with_retry(
+                    client, target, file_path, caption=caption,
                     force_document=False, supports_streaming=True,
                     progress_callback=progress_callback, reply_to=reply_to,
                 )
                 ids.append(msg.id)
             else:
                 for index, part_path in enumerate(part_files):
-                    msg = client.send_file(
-                        target, part_path,
+                    msg = _send_file_with_retry(
+                        client, target, part_path,
                         caption=caption if index == 0 else "",
                         force_document=True,
                         progress_callback=progress_callback, reply_to=reply_to,
@@ -402,8 +422,8 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
                     "filename": os.path.basename(sub_path),
                     "parent_title": video_meta["title"],
                 }
-                smsg = client.send_file(
-                    target, sub_path, caption=build_caption(sub_meta),
+                smsg = _send_file_with_retry(
+                    client, target, sub_path, caption=build_caption(sub_meta),
                     force_document=True, reply_to=reply_to,
                 )
                 ids.append(smsg.id)

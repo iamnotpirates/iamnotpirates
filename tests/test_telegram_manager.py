@@ -175,8 +175,20 @@ def test_create_client_passes_credentials(monkeypatch):
     fake_ctor = MagicMock()
     monkeypatch.setitem(sys.modules, "telethon", MagicMock(TelegramClient=fake_ctor))
     client = create_client({"tg_api_id": "123", "tg_api_hash": "hash"})
-    fake_ctor.assert_called_once_with(tm.SESSION_PATH, 123, "hash")
+    fake_ctor.assert_called_once_with(
+        tm.SESSION_PATH, 123, "hash",
+        connection_retries=10, retry_delay=2, auto_reconnect=True,
+    )
     assert client is fake_ctor.return_value
+
+
+def test_send_file_with_retry_retries_on_oserror():
+    from src.telegram_manager import _send_file_with_retry
+    client = MagicMock()
+    client.send_file.side_effect = [OSError(121, "The semaphore timeout period has expired"), "MsgObj"]
+    res = _send_file_with_retry(client, "me", "file.mp4")
+    assert res == "MsgObj"
+    assert client.send_file.call_count == 2
 
 
 def test_login_flow_rejects_non_numeric_api_id(monkeypatch):
