@@ -23,6 +23,7 @@ from src.telegram_manager import (
     ensure_telethon, create_client, login_flow, is_configured, is_logged_in,
     get_destinations, scan_backups, upload_backup, restore_backup,
     collect_local_entries, mark_backed_entries, matches_query,
+    tg_connect, tg_disconnect, parse_destination_input,
 )
 from src.video_extractor import extract_video_sources
 from src.downloader import (
@@ -1018,13 +1019,13 @@ def scan_with_spinner(config: dict) -> list:
         try:
             items = scan_backups(client, get_destinations(config))
         finally:
-            client.disconnect()
+            tg_disconnect(client)
     return items
 
 
 def _connected_client(config: dict):
     client = create_client(config)
-    client.connect()
+    tg_connect(client)
     return client
 
 
@@ -1065,7 +1066,7 @@ def _restore_from_telegram(config: dict, chosen: dict) -> str:
                         pass
             raise exc
     finally:
-        client.disconnect()
+            tg_disconnect(client)
 
 
 def handle_telegram_settings(config: dict) -> None:
@@ -1258,7 +1259,7 @@ def maybe_auto_backup(video_path: str, config: dict, title: str, year: str,
             with progress:
                 upload_backup(client, video_path, sub_paths, meta, destinations, progress_callback=cb)
         finally:
-            client.disconnect()
+            tg_disconnect(client)
         print_success(f"Auto-backup Telegram selesai: {title}")
     except Exception as exc:
         console.print(f"[yellow]⚠️ Auto-backup gagal untuk {title}: {exc}[/yellow]")
@@ -1322,7 +1323,7 @@ def handle_telegram_manual_backup(config: dict) -> None:
                 print_error(f"Gagal backup {entry['title']}: {exc}")
                 fail_count += 1
     finally:
-        client.disconnect()
+            tg_disconnect(client)
     console.print(f"\n[bold]Selesai: {success_count} berhasil, {fail_count} gagal.[/bold]")
     _pause()
 

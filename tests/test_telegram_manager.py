@@ -215,6 +215,12 @@ def test_login_flow_uses_password_prompt_for_api_hash(monkeypatch):
     monkeypatch.setattr("questionary.password", fake_password)
 
     class FakeClient:
+        def __init__(self):
+            self.loop = self
+
+        def run_until_complete(self, coro):
+            return coro
+
         def start(self, phone=None):
             return self
 
@@ -222,7 +228,7 @@ def test_login_flow_uses_password_prompt_for_api_hash(monkeypatch):
             return True
 
         def disconnect(self):
-            pass
+            return "coro-disconnect"
 
     saved = {}
     monkeypatch.setattr(tm, "save_config_key", lambda k, v: saved.setdefault(k, v))
@@ -640,3 +646,34 @@ def test_mark_backed_entries_matches_scan_keys():
     assert mbe(local, scanned)[0]["backed"] is True
     other = [{"title": "Lain", "key": bk("Lain", "", None, None)}]
     assert mbe(other, scanned)[0]["backed"] is False
+
+
+class LoopStubClient:
+    def __init__(self):
+        self.loop = self
+        self.received = []
+        self.connected = False
+
+    def run_until_complete(self, coro):
+        self.received.append(coro)
+        if coro == "CORO-CONNECT":
+            self.connected = True
+        elif coro == "CORO-DISCONNECT":
+            self.connected = False
+        return coro
+
+    def connect(self):
+        return "CORO-CONNECT"
+
+    def disconnect(self):
+        return "CORO-DISCONNECT"
+
+
+def test_tg_connect_and_disconnect_await_via_client_loop():
+    from src.telegram_manager import tg_connect, tg_disconnect
+    client = LoopStubClient()
+    assert tg_connect(client) == "CORO-CONNECT"
+    assert client.connected is True
+    assert tg_disconnect(client) == "CORO-DISCONNECT"
+    assert client.connected is False
+    assert client.received == ["CORO-CONNECT", "CORO-DISCONNECT"]

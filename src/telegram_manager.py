@@ -121,6 +121,14 @@ def is_logged_in() -> bool:
     return os.path.exists(SESSION_PATH + ".session")
 
 
+def tg_connect(client):
+    return client.loop.run_until_complete(client.connect())
+
+
+def tg_disconnect(client):
+    return client.loop.run_until_complete(client.disconnect())
+
+
 def logout_session() -> None:
     for suffix in ("", ".session", ".session-journal"):
         path = SESSION_PATH + suffix
@@ -239,7 +247,7 @@ def login_flow(console, config: dict) -> bool:
         client.start(phone=lambda: phone)
         authorized = client.is_user_authorized()
     finally:
-        client.disconnect()
+        tg_disconnect(client)
     if authorized:
         console.print("[bold green]✓ Login Telegram berhasil.[/bold green]")
         return True
