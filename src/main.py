@@ -16,7 +16,7 @@ from src.scraper import fetch_featured_content, search_content
 from src.ui import (
     print_header, format_featured_table, print_error, print_success,
     print_download_summary, print_startup_dependency_notice,
-    format_backup_table, format_local_delete_table,
+    format_backup_table, format_local_delete_table, format_entry_label,
     format_hybrid_results, format_hybrid_table,
 )
 from src.telegram_manager import (
@@ -1291,10 +1291,11 @@ def handle_telegram_manual_backup(config: dict) -> None:
     console.print(format_local_delete_table(entries))
     labels = []
     for idx, entry in enumerate(entries, start=1):
+        label_title = format_entry_label(entry)
         if entry["backed"]:
-            labels.append(f"{idx}. ✅ {entry['title']} (duplikat)")
+            labels.append(f"{idx}. ✅ {label_title} (duplikat)")
         else:
-            labels.append(f"{idx}. {entry['title']}")
+            labels.append(f"{idx}. {label_title}")
     picked = questionary.checkbox(
         "Pilih item untuk di-backup ke Telegram (SPACE pilih, ENTER lanjut):",
         choices=labels
@@ -1354,10 +1355,11 @@ def handle_telegram_delete_local(config: dict) -> None:
     console.print(format_local_delete_table(entries))
     labels = []
     for idx, entry in enumerate(entries, start=1):
+        label_title = format_entry_label(entry)
         if entry["backed"]:
-            labels.append(f"{idx}. ✅ {entry['title']} (aman)")
+            labels.append(f"{idx}. ✅ {label_title} (aman)")
         else:
-            labels.append(f"{idx}. ⚠️ {entry['title']} (BELUM DIBACKUP)")
+            labels.append(f"{idx}. ⚠️ {label_title} (BELUM DIBACKUP)")
     picked = questionary.checkbox(
         "Pilih file lokal yang ingin DIHAPUS (SPACE pilih, ENTER lanjut):",
         choices=labels

@@ -285,3 +285,23 @@ def test_format_hybrid_results_tags_sources():
     assert "1.5 MB" in text
 
 
+
+
+def test_format_entry_label_movie_with_year():
+    from src.ui import format_entry_label
+    assert format_entry_label({"title": "Film A", "year": "2024",
+                               "media_type": "movie"}) == "Film A (2024)"
+
+
+def test_format_entry_label_episode_shows_season_episode():
+    from src.ui import format_entry_label
+    label = format_entry_label({"title": "Monster", "year": "",
+                                "media_type": "episode", "season": 1, "episode": 5})
+    assert label == "Monster S01E05"
+
+
+def test_format_entry_label_episode_with_year():
+    from src.ui import format_entry_label
+    label = format_entry_label({"title": "House of the Dragon", "year": "2022",
+                                "media_type": "episode", "season": 2, "episode": 10})
+    assert label == "House of the Dragon (2022) S02E10"

@@ -229,6 +229,20 @@ def format_backup_table(items: list) -> Table:
     return table
 
 
+def format_entry_label(entry: dict) -> str:
+    label = entry.get("title", "")
+    year = str(entry.get("year") or "").strip()
+    if year and year.upper() != "N/A":
+        label += f" ({year})"
+    if entry.get("media_type") == "episode":
+        season = entry.get("season")
+        episode = entry.get("episode")
+        se = "S" + (f"{int(season):02d}" if season is not None else "??")
+        se += "E" + (f"{int(episode):02d}" if episode is not None else "??")
+        label += f" {se}"
+    return label
+
+
 def format_local_delete_table(entries: list) -> Table:
     table = Table(title="[bold cyan]🗑️ File Lokal[/bold cyan]",
                   header_style="bold magenta", show_header=True, expand=True)
@@ -244,7 +258,7 @@ def format_local_delete_table(entries: list) -> Table:
         else:
             status = "[red]⚠️ BELUM DIBACKUP[/red]"
         table.add_row(
-            str(idx), entry.get("title", ""), entry.get("media_type", ""),
+            str(idx), format_entry_label(entry), entry.get("media_type", ""),
             human_size(entry.get("file_size", 0)), status,
             entry.get("output_path", ""),
         )
