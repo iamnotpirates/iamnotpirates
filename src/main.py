@@ -17,6 +17,7 @@ from src.ui import (
     print_header, format_featured_table, print_error, print_success,
     print_download_summary, print_startup_dependency_notice,
     format_backup_table, format_local_delete_table, format_entry_label,
+    apply_source_preference,
     format_hybrid_results, format_hybrid_table,
 )
 from src.telegram_manager import (
@@ -972,6 +973,7 @@ def handle_search(active_url: str, config: dict) -> None:
             console.print(f"[dim]ℹ️ Pencarian backup Telegram dilewati ({telegram_skip_reason}).[/dim]")
 
         rows = format_hybrid_results(idlix_items, tg_items)
+        rows = apply_source_preference(rows, config.get("source_preference", "telegram"))
         if not rows:
             console.print(f"[yellow]Tidak ada hasil ditemukan untuk \"{clean_query}\".[/yellow]")
             continue
@@ -979,29 +981,44 @@ def handle_search(active_url: str, config: dict) -> None:
         console.print(format_hybrid_table(rows))
 
         raw = questionary.text(
-            f"Pilih nomor item untuk diproses (1-{len(rows)}, kosongkan untuk kembali):"
+            f"Pilih nomor item (bisa lebih dari satu, contoh 1,3 — kosongkan untuk kembali):"
         ).ask()
-        if not raw or not raw.strip().isdecimal() or not (1 <= int(raw) <= len(rows)):
+        if not raw or not raw.strip():
             console.print("[yellow]Pilihan dibatalkan.[/yellow]")
             return
-        chosen = rows[int(raw) - 1]
-
-        if chosen.get("__source__") == "telegram":
-            if _confirm_or_proceed(f"Restore '{chosen['title']}' dari Telegram ke lokal?"):
-                try:
-                    out_path = _restore_from_telegram(config, chosen)
-                    print_success(f"Restore selesai: {out_path}")
-                except Exception as exc:
-                    print_error(f"Restore gagal: {exc}")
-            _pause()
+        indices = []
+        for part in re.split(r"[,\s]+", raw.strip()):
+            if not part.isdecimal() or not (1 <= int(part) <= len(rows)):
+                console.print(f"[yellow]Nomor '{part}' tidak valid — dilewati.[/yellow]")
+                continue
+            idx = int(part) - 1
+            if idx not in indices:
+                indices.append(idx)
+        if not indices:
             return
-
         summary = {
             "total_items": 0, "video_success": 0, "video_failed": 0,
             "video_skipped": 0, "sub_success": 0, "sub_failed": 0, "items": [],
         }
-        process_download_item(chosen, active_url, config, summary)
-        print_download_summary(summary)
+        restored = failed_count = 0
+        for idx in indices:
+            chosen = rows[idx]
+            if chosen.get("__source__") == "telegram":
+                if not _confirm_or_proceed(f"Restore '{chosen['title']}' dari Telegram ke lokal?"):
+                    continue
+                try:
+                    out_path = _restore_from_telegram(config, chosen)
+                    print_success(f"Restore selesai: {out_path}")
+                    restored += 1
+                except Exception as exc:
+                    print_error(f"Restore gagal: {exc}")
+                    failed_count += 1
+            else:
+                process_download_item(chosen, active_url, config, summary)
+        if summary["total_items"]:
+            print_download_summary(summary)
+        if restored or failed_count:
+            console.print(f"[bold]Telegram: {restored} berhasil, {failed_count} gagal.[/bold]")
         _pause()
         return
 
@@ -1185,27 +1202,47 @@ def handle_telegram_search_restore(config: dict) -> None:
         _pause()
         return
     console.print(format_backup_table(filtered))
-    raw = questionary.text(f"Pilih nomor untuk restore (1-{len(filtered)}, kosongkan untuk batal):").ask()
-    if not raw or not raw.strip().isdecimal() or not (1 <= int(raw) <= len(filtered)):
+    raw = questionary.text(
+        f"Pilih nomor untuk restore (bisa lebih dari satu, contoh 1,3 — kosongkan untuk batal):"
+    ).ask()
+    if not raw or not raw.strip():
         console.print("[yellow]Restore dibatalkan.[/yellow]")
         return
-    chosen = filtered[int(raw) - 1]
-    if not _confirm_or_proceed(f"Restore '{chosen['title']}' ke folder lokal sekarang?"):
+    indices = []
+    for part in re.split(r"[,\s]+", raw.strip()):
+        if not part.isdecimal() or not (1 <= int(part) <= len(filtered)):
+            console.print(f"[yellow]Nomor '{part}' tidak valid — dilewati.[/yellow]")
+            continue
+        idx = int(part) - 1
+        if idx not in indices:
+            indices.append(idx)
+    if not indices:
+        console.print("[yellow]Restore dibatalkan.[/yellow]")
         return
-    try:
-        out_path = _restore_from_telegram(config, chosen)
-    except Exception as exc:
-        print_error(f"Restore gagal: {exc}")
-        return
-    print_success(f"Restore selesai: {out_path}")
-    try:
-        import subprocess
-        target = os.path.normpath(out_path)
-        folder = os.path.dirname(target)
-        if folder and os.path.isdir(folder):
-            subprocess.Popen(["explorer", "/select,", target])
-    except Exception:
-        pass
+    success = failed = skipped = 0
+    last_path = None
+    for idx in indices:
+        chosen = filtered[idx]
+        if not _confirm_or_proceed(f"Restore '{chosen['title']}' ke folder lokal sekarang?"):
+            skipped += 1
+            continue
+        try:
+            last_path = _restore_from_telegram(config, chosen)
+            print_success(f"Restore selesai: {last_path}")
+            success += 1
+        except Exception as exc:
+            print_error(f"Restore gagal: {exc}")
+            failed += 1
+    console.print(f"[bold]Selesai: {success} berhasil, {failed} gagal, {skipped} dilewati.[/bold]")
+    if success == 1 and last_path:
+        try:
+            import subprocess
+            target = os.path.normpath(last_path)
+            folder = os.path.dirname(target)
+            if folder and os.path.isdir(folder):
+                subprocess.Popen(["explorer", "/select,", target])
+        except Exception:
+            pass
     _pause()
 
 

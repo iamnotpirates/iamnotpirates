@@ -487,3 +487,34 @@ def test_settings_test_destinations_action(mock_dests, mock_test, _disc, _conn, 
         handle_telegram_settings({})
     assert mock_test.called
     assert mock_test.call_args[0][1] == [{"type": "group", "target": "-100123", "topic": "7"}]
+
+
+TWO_FILMS = [
+    {"title": "Film A", "year": "2024", "media_type": "movie", "season": None,
+     "episode": None, "file_size": 10, "part_count": 1, "subtitles": [],
+     "video_msg_ids": [1], "sub_msg_ids": [], "chat": "me"},
+    {"title": "Film B", "year": "2025", "media_type": "movie", "season": None,
+     "episode": None, "file_size": 11, "part_count": 1, "subtitles": [],
+     "video_msg_ids": [2], "sub_msg_ids": [], "chat": "me"},
+]
+
+
+@patch("src.main._restore_from_telegram", side_effect=["C:/ok/a.mp4", "C:/ok/b.mp4"])
+@patch("src.main.questionary.text")
+@patch("src.main.scan_with_spinner", return_value=TWO_FILMS)
+@patch("src.main.require_telegram_ready", return_value=True)
+def test_handle_telegram_search_restores_multiple_picks(
+    mock_ready, mock_scan, mock_text, mock_restore
+):
+    from src.main import handle_telegram_search_restore
+    mock_text.return_value = MagicMock(ask=MagicMock(side_effect=[
+        "film",   # query match keduanya
+        "1,2",    # pilih dua nomor sekaligus
+    ]))
+    from unittest.mock import patch as _p
+    with _p("src.main._confirm_or_proceed", return_value=True), \
+         _p("builtins.print"):
+        handle_telegram_search_restore({})
+    assert mock_restore.call_count == 2
+    picked_titles = {call.args[1]["title"] for call in mock_restore.call_args_list}
+    assert picked_titles == {"Film A", "Film B"}

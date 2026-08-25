@@ -305,3 +305,27 @@ def test_format_entry_label_episode_with_year():
     label = format_entry_label({"title": "House of the Dragon", "year": "2022",
                                 "media_type": "episode", "season": 2, "episode": 10})
     assert label == "House of the Dragon (2022) S02E10"
+
+
+def test_apply_source_preference_keeps_preferred_on_duplicate():
+    from src.ui import apply_source_preference
+    rows = [
+        {"title": "Film X", "year": "2024", "__source__": "idlix"},
+        {"title": "Film X", "year": "2024", "__source__": "telegram",
+         "video_msg_ids": [1]},
+        {"title": "Film Y", "year": "", "__source__": "idlix"},
+    ]
+    kept = apply_source_preference(rows, "telegram")
+    srcs_x = sorted(r["__source__"] for r in kept if r["title"] == "Film X")
+    assert srcs_x == ["telegram"]
+    assert any(r["title"] == "Film Y" for r in kept)
+
+
+def test_apply_source_preference_idlix_first():
+    from src.ui import apply_source_preference
+    rows = [
+        {"title": "Film X", "year": "2024", "__source__": "idlix"},
+        {"title": "Film X", "year": "2024", "__source__": "telegram"},
+    ]
+    kept = apply_source_preference(rows, "idlix")
+    assert [r["__source__"] for r in kept] == ["idlix"]

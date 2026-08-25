@@ -274,6 +274,32 @@ def format_hybrid_results(idlix_items: list, tg_items: list) -> list:
     return rows
 
 
+def apply_source_preference(rows: list, preference: str) -> list:
+    """Drop duplicate media entries when both sources offer the same title.
+
+    Keeps the preferred source's row ("telegram" or "idlix"); rows present in
+    only one source always stay.
+    """
+    groups = {}
+    for row in rows:
+        key = (
+            str(row.get("title", "")).strip().lower(),
+            str(row.get("year", "")),
+            row.get("media_type", ""),
+            row.get("season"), row.get("episode"),
+        )
+        groups.setdefault(key, []).append(row)
+    kept = []
+    for group in groups.values():
+        if len(group) == 1:
+            kept.append(group[0])
+            continue
+        preferred = [r for r in group
+                     if r.get("__source__") == preference] or group
+        kept.append(preferred[0])
+    return kept
+
+
 def format_hybrid_table(rows: list) -> Table:
     table = Table(title="[bold cyan]🔍 Hasil Pencarian[/bold cyan]",
                   header_style="bold magenta", show_header=True, expand=True)
