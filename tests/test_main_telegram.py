@@ -146,7 +146,7 @@ class DisconnectedFakeClient:
             raise RuntimeError("Cannot send requests while disconnected")
         return MagicMock(id=1)
 
-    def iter_messages(self, target, reverse=None, limit=None):
+    def iter_messages(self, target, reverse=None, limit=None, reply_to=None):
         if not self._connected:
             raise RuntimeError("Cannot send requests while disconnected")
         self.calls.append("iter")

@@ -281,7 +281,7 @@ class FakeClient:
         self._messages_by_target = messages_by_target
         self.iter_calls = []
 
-    def iter_messages(self, target, reverse=None, limit=None):
+    def iter_messages(self, target, reverse=None, limit=None, reply_to=None):
         self.iter_calls.append((target, reverse, limit))
         return iter(self._messages_by_target.get(target, []))
 
@@ -976,3 +976,34 @@ def test_restore_archive_extracts_and_returns_video(monkeypatch, tmp_path):
     out = tm.restore_backup(ArcClient(), item, cfg)
     assert out.endswith(os.path.join("Season 01", "Monster S01E05.mkv")) or out.endswith("Monster S01E05.mkv")
     assert extracted["args"][2] == os.path.dirname(out)
+
+
+class ScanSpyClient:
+    def __init__(self):
+        self.calls = []
+
+    def get_entity(self, target):
+        return f"Entity-{target}"
+
+    def iter_messages(self, target, reverse=None, limit=None, reply_to=None):
+        self.calls.append({"target": target, "reverse": reverse,
+                           "limit": limit, "reply_to": reply_to})
+        return iter([])
+
+
+def test_scan_backups_scopes_iteration_to_topic():
+    import src.telegram_manager as tm
+    client = ScanSpyClient()
+    tm.scan_backups(client, [
+        {"type": "group", "target": "-1002312123164", "topic": 10777},
+        {"type": "saved", "target": "me", "topic": None},
+    ])
+    assert client.calls[0]["reply_to"] == 10777
+    assert client.calls[1]["reply_to"] is None
+
+
+def test_scan_backups_no_reverse_full_history_needed_only_topic():
+    import src.telegram_manager as tm
+    client = ScanSpyClient()
+    tm.scan_backups(client, [{"type": "group", "target": "-100x", "topic": 5}])
+    assert client.calls[0]["limit"] is None
