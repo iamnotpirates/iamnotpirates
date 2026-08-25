@@ -1087,7 +1087,6 @@ def handle_telegram_settings(config: dict) -> None:
                 "🔑 Isi Ulang API ID / Hash",
                 "📢 Set Channel Tujuan / Set Target Channel",
                 "🎯 Ubah Tujuan Backup (Saved/Channel/Group/Topik)",
-                "📂 Set Folder Scan Backup",
                 "🤖 Toggle Auto-Backup",
                 "🚪 Logout (hapus session)",
                 "⬅ Kembali / Back",
@@ -1124,16 +1123,6 @@ def handle_telegram_settings(config: dict) -> None:
                 print_success(f"Tujuan backup: {tokens}")
                 console.print("[yellow]Catatan: group dengan topik di-upload ulang "
                               "(forward Telegram tidak bisa menentukan topik).[/yellow]")
-        elif action == "📂 Set Folder Scan Backup":
-            current = json.dumps(config.get("scan_dirs", []), ensure_ascii=False)
-            console.print(f"[dim]Saat ini: {current}[/dim]")
-            raw = questionary.text(
-                "Folder yang discan (pisahkan koma; kosongkan untuk batal):"
-            ).ask()
-            if raw is not None:
-                dirs = [d.strip() for d in raw.split(",") if d.strip()]
-                save_config_key("scan_dirs", json.dumps(dirs))
-                print_success(f"Folder scan: {dirs}")
         elif action == "🤖 Toggle Auto-Backup":
             new_val = "0" if fresh.get("tg_auto_backup") == "1" else "1"
             save_config_key("tg_auto_backup", new_val)
@@ -1216,10 +1205,22 @@ def handle_telegram_list(config: dict) -> None:
     _pause()
 
 
+def _default_scan_dirs(config: dict) -> list:
+    dirs = []
+    for media_type in ("movie", "series"):
+        try:
+            d = get_download_dir(config, media_type=media_type)
+        except Exception:
+            d = None
+        if d and d not in dirs:
+            dirs.append(d)
+    return dirs
+
+
 def _local_listing_with_backup_status(config: dict) -> list:
     entries = merge_local_entries(
         collect_local_entries(),
-        collect_folder_entries(config.get("scan_dirs", [])),
+        collect_folder_entries(_default_scan_dirs(config)),
     )
     try:
         scanned = scan_with_spinner(config)
