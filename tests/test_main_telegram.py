@@ -308,6 +308,35 @@ def test_manual_backup_calls_upload_per_selection(tmp_path, monkeypatch):
     assert fake_client.calls[-1] == "disconnect"
 
 
+def test_manual_backup_allows_rebackup_backed_items(tmp_path, monkeypatch):
+    real_file = tmp_path / "Safe Film.mp4"
+    real_file.write_bytes(b"x" * 5)
+    entries = [{"title": "Safe Film", "year": "2024", "media_type": "movie", "season": None,
+                "episode": None, "output_path": str(real_file), "file_size": 5, "backed": True,
+                "key": "safefilm|2024||"}]
+    monkeypatch.setattr(main_mod, "collect_local_entries", lambda: entries)
+    monkeypatch.setattr(main_mod, "collect_folder_entries", lambda dirs: [])
+    monkeypatch.setattr(main_mod, "scan_with_spinner", lambda cfg: [{"title": "Safe Film", "year": "2024"}])
+    monkeypatch.setattr(main_mod, "require_telegram_ready", lambda cfg: True)
+
+    uploads = []
+
+    def fake_upload(client, path, subs, meta, dests, progress_callback=None):
+        uploads.append((path, meta))
+        return {"video_msg_ids": [1], "sub_msg_ids": [], "forwarded_to": []}
+
+    monkeypatch.setattr(main_mod, "upload_backup", fake_upload)
+    monkeypatch.setattr(main_mod, "create_client", lambda cfg: DisconnectedFakeClient())
+
+    with patch("src.main.questionary.checkbox") as mock_check, \
+         patch("src.main.questionary.press_any_key_to_continue"):
+        mock_check.return_value = MagicMock(ask=MagicMock(return_value=["1. Safe Film (2024) [RE-BACKUP / OVERWRITE]"]))
+        main_mod.handle_telegram_manual_backup({})
+
+    assert len(uploads) == 1
+    assert uploads[0][0] == str(real_file)
+
+
 def test_delete_local_requires_typed_confirmation_for_unbacked(tmp_path, monkeypatch):
     real_risky = tmp_path / "Risky Film.mp4"
     real_risky.write_bytes(b"y" * 6)
