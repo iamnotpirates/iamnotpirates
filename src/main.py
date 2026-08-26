@@ -55,6 +55,20 @@ if hasattr(sys.stderr, "reconfigure"):
 
 console = Console()
 
+def compute_movie_expected_path(raw_title: str, item_url: str, target_dir: str) -> str:
+    """Resolves the final .mp4 path of a movie item without any network calls."""
+    year_match = re.search(r"\b(19\d\d|20\d\d)\b", raw_title)
+    if year_match:
+        year = year_match.group(1)
+        clean_title = re.sub(r"\b(19\d\d|20\d\d)\b", "", raw_title).strip()
+    else:
+        url_year = re.search(r"-?(19\d\d|20\d\d)\b", item_url)
+        year = url_year.group(1) if url_year else "N/A"
+        clean_title = raw_title
+
+    folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
+    return os.path.join(target_dir, folder_name, f"{folder_name}.mp4")
+
 def precheck_existing_files_prompt(items: list[dict], batch_state: dict | None = None) -> tuple[str, dict]:
     """Pre-checks if any items in the batch already exist locally.
 
@@ -799,6 +813,23 @@ def handle_cart(active_url: str, config: dict) -> None:
                 "items": []
             }
             batch_state = {}
+
+            # Pre-check existing local files for all movie items upfront (before any download starts)
+            movie_check_items = []
+            for item in cart_items:
+                is_series = item.get("type") == "TV Series" or "/series/" in item.get("url", "")
+                if is_series:
+                    continue  # Series paths can only be resolved after episode selection
+                item_dir = preset_dir if preset_dir else default_movie_dir
+                expected_path = compute_movie_expected_path(item.get("title", "Unknown"), item.get("url", ""), item_dir)
+                movie_check_items.append({
+                    "expected_path": expected_path,
+                    "sub_choice": preset_sub_choice,
+                    "title": item.get("title", "Unknown"),
+                })
+            if movie_check_items:
+                precheck_existing_files_prompt(movie_check_items, batch_state=batch_state)
+
             # Download item one by one and remove on success
             for idx, item in enumerate(cart_items):
                 console.print(f"\n[bold cyan]=== Mengunduh Item Keranjang {idx+1}/{len(cart_items)}: {item['title']} ===[/bold cyan]")
