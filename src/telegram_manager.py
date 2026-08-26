@@ -20,59 +20,54 @@ CAPTION_VERSION = 1
 
 
 def build_caption(meta: dict) -> str:
+    kind = meta.get("kind", "")
+    if kind == "subtitle":
+        title_line = f"💬 {meta.get('filename', '')}"
+        payload = {
+            "app": APP_MARKER,
+            "kind": "subtitle",
+            "filename": meta.get("filename", ""),
+            "parent_title": meta.get("parent_title", ""),
+        }
+        return f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
+
+    media_type = meta.get("media_type")
+    if media_type == "episode" or meta.get("season") is not None:
+        compact_kind = "series"
+    else:
+        compact_kind = "movie"
+
     title_line = f"🎬 {meta.get('title', '')}"
     year = meta.get("year")
     if year and year != "N/A":
         title_line += f" ({year})"
-    if meta.get("media_type") == "episode":
+    if compact_kind == "series":
         season = meta.get("season")
         episode = meta.get("episode")
         se = "S" + (f"{int(season):02d}" if season is not None else "??")
         se += "E" + (f"{int(episode):02d}" if episode is not None else "??")
         title_line += f" {se}"
-    kind = meta.get("kind", "")
-    if kind == "subtitle":
-        title_line = f"💬 {meta.get('filename', '')}"
 
-    payload = {"app": APP_MARKER, "v": CAPTION_VERSION}
-    payload.update(meta)
+    payload = {
+        "app": APP_MARKER,
+        "kind": compact_kind,
+        "title": meta.get("title", ""),
+    }
+    if year and year != "N/A":
+        payload["year"] = str(year)
+    if compact_kind == "series":
+        if meta.get("season") is not None:
+            payload["season"] = meta["season"]
+        if meta.get("episode") is not None:
+            payload["episode"] = meta["episode"]
 
-    # Telegram caption limit is 1024 chars. Stay under 1000.
+    part_count = meta.get("part_count", 1)
+    if part_count > 1:
+        payload["part_count"] = part_count
+
     caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
-    if len(caption) > 700:
-        # For 7z archives or large metadata, omit heavy redundant file list to preserve title
-        if payload.get("archive"):
-            subs = payload.get("subtitles")
-            if isinstance(subs, list):
-                payload["sub_count"] = len(subs)
-                payload.pop("subtitles", None)
-            payload.pop("filename", None)
-            caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
-
-    if len(caption) > 1000:
-        subs = payload.get("subtitles")
-        if isinstance(subs, list) and len(subs) > 3:
-            payload["subtitles"] = subs[:3]
-            caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
-
-        if len(caption) > 1000 and isinstance(payload.get("subtitles"), list):
-            payload["subtitles"] = []
-            caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
-
-        if len(caption) > 1000 and payload.get("filename"):
-            payload["filename"] = payload["filename"][:50] + "..."
-            caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
-
-        if len(caption) > 1000:
-            if len(title_line) > 100:
-                title_line = title_line[:97] + "..."
-            if len(str(payload.get("title", ""))) > 100:
-                payload["title"] = str(payload["title"])[:97] + "..."
-            caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
-
-        if len(caption) > 1024:
-            caption = caption[:1024]
-
+    if len(caption) > 1024:
+        caption = caption[:1024]
     return caption
 
 
@@ -81,13 +76,25 @@ def parse_caption(text: Optional[str]) -> Optional[dict]:
         return None
     match = re.search(r"```json\s*(\{.*?\})\s*```", text, re.DOTALL)
     if not match:
-        return None
+        match = re.search(r"(\{.*?\})", text, re.DOTALL)
+        if not match:
+            return None
     try:
         data = json.loads(match.group(1))
     except json.JSONDecodeError:
         return None
     if not isinstance(data, dict) or data.get("app") != APP_MARKER:
         return None
+
+    kind = data.get("kind")
+    if kind in ("movie", "series"):
+        data["media_type"] = "episode" if kind == "series" else "movie"
+        data["kind"] = "video"
+    elif not data.get("media_type"):
+        data["media_type"] = "episode" if data.get("season") is not None else "movie"
+    if "kind" not in data:
+        data["kind"] = "video"
+
     return data
 
 

@@ -26,7 +26,9 @@ def test_parse_caption_roundtrip_video():
             "media_type": "movie", "season": None, "episode": None,
             "file_size": 12345, "part_count": 2, "subtitles": ["a.srt"]}
     parsed = parse_caption(build_caption(meta))
-    assert parsed == {"app": "iamnotpirates", "v": 1, **meta}
+    assert parsed["app"] == "iamnotpirates"
+    assert parsed["title"] == "Judul Film"
+    assert parsed["year"] == "2024"
 
 
 def test_parse_caption_roundtrip_subtitle():
@@ -412,8 +414,8 @@ def test_upload_single_part_sends_archive_document_and_forwards(tmp_path, monkey
     sent = client.sent[0]
     assert sent["force_document"] is True
     assert sent["path"].endswith(".7z")
-    assert '"archive": true' in sent["caption"].replace("'", '"')
-    assert '"part_count": 1' in sent["caption"].replace("'", '"')
+    assert '"kind": "movie"' in sent["caption"].replace("'", '"')
+    assert '"title": "Film B"' in sent["caption"].replace("'", '"')
     assert result["video_msg_ids"] == [101]
     assert result["forwarded_to"] == ["@c"]
     assert client.forwards == [("@c", [101], "me")]
@@ -432,8 +434,6 @@ def test_upload_multi_part_splits_captions_first_part_only_and_cleans_temp(monke
     caps = [s["caption"] for s in client.sent]
     first_meta = json.loads(caps[0].split("```json")[1].strip().strip("`"))
     assert first_meta["part_count"] == 2
-    assert first_meta["file_size"] == 2500
-    assert first_meta["archive"] is True
     assert caps[1] == ""
     assert all(s["force_document"] for s in client.sent)
     assert parts_dir.exists()
@@ -450,7 +450,7 @@ def test_subs_included_in_archive_caption_not_sent_separately(tmp_path, monkeypa
     upload_backup(client, src, [str(sub_a), str(sub_b)], dict(META), [UPLOAD_DESTS[0]])
     assert len(client.sent) == 1
     cap = client.sent[0]["caption"].replace("'", '"')
-    assert '"subtitles": ["Film B.id.srt", "Film B.eng.srt"]' in cap
+    assert '"kind": "movie"' in cap
 
 
 def test_auto_tmp_dir_created_and_removed(monkeypatch, tmp_path):
@@ -774,7 +774,7 @@ def test_build_caption_episode_includes_season_episode():
                          "media_type": "episode", "season": 1, "episode": 5,
                          "file_size": 100, "part_count": 1, "subtitles": []})
     assert cap.startswith("🎬 Monster (2023) S01E05")
-    assert '"kind": "video"' in cap
+    assert '"kind": "series"' in cap
 
 
 def test_build_caption_optimized_for_long_anime_titles():
@@ -798,7 +798,6 @@ def test_build_caption_optimized_for_long_anime_titles():
     assert long_title in cap
     parsed = parse_caption(cap)
     assert parsed["title"] == long_title
-    assert parsed.get("archive") is True
 
 
 def test_build_caption_respects_telegram_1024_char_limit():
@@ -969,10 +968,8 @@ def test_upload_backup_archives_video_with_all_subs(monkeypatch, tmp_path):
     sent = client.sent[0]
     assert sent["path"].endswith(".7z")
     assert sent["force_document"] is True
-    assert '"archive": true' in sent["caption"]
-    assert '"filename": "Monster S01E05.mkv"' in sent["caption"]
-    for s in subs:
-        assert os.path.basename(s) in sent["caption"]
+    assert '"kind": "series"' in sent["caption"]
+    assert '"title": "Monster"' in sent["caption"]
     assert res["video_msg_ids"] == [101]
 
 
@@ -987,7 +984,7 @@ def test_upload_backup_splits_big_archive(monkeypatch, tmp_path):
                   [{"type": "saved", "target": "me", "topic": None}])
     assert len(client.sent) == 2
     assert all(s["force_document"] is True for s in client.sent)
-    assert '"archive": true' in client.sent[0]["caption"]
+    assert '"kind": "movie"' in client.sent[0]["caption"]
 
 
 def test_restore_archive_extracts_and_returns_video(monkeypatch, tmp_path):
