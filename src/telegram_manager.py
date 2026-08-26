@@ -252,13 +252,21 @@ def _notify_upload_retry(describe: str, attempt: int, max_retries: int, exc: Exc
         print(f"⚠️ {describe}: koneksi gagal — mencoba ulang {attempt}/{max_retries}...")
 
 
+def _is_fatal_rpc_error(exc: Exception) -> bool:
+    err_name = type(exc).__name__
+    fatal_patterns = (
+        "Forbidden", "Private", "Banned", "Invalid", "Closed", "Deleted", "TooLong"
+    )
+    return any(p in err_name for p in fatal_patterns)
+
+
 def _send_file_with_retry(client, target, file_to_send, max_retries: int = 3,
                           describe: str = "", **kwargs):
     for attempt in range(1, max_retries + 1):
         try:
             return client.send_file(target, file_to_send, **kwargs)
         except (OSError, ConnectionError, Exception) as exc:
-            if attempt >= max_retries:
+            if _is_fatal_rpc_error(exc) or attempt >= max_retries:
                 raise
             if describe:
                 _notify_upload_retry(describe, attempt + 1, max_retries, exc)

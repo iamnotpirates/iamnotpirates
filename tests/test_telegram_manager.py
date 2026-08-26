@@ -1009,6 +1009,17 @@ def test_scan_backups_no_reverse_full_history_needed_only_topic():
     assert client.calls[0]["limit"] is None
 
 
+def test_send_file_with_retry_does_not_retry_fatal_rpc_error():
+    from src.telegram_manager import _send_file_with_retry
+    class ChatWriteForbiddenError(Exception):
+        pass
+    client = MagicMock()
+    client.send_file.side_effect = ChatWriteForbiddenError("Forbidden")
+    with pytest.raises(ChatWriteForbiddenError):
+        _send_file_with_retry(client, "me", "video.mp4", max_retries=3)
+    assert client.send_file.call_count == 1
+
+
 def test_send_file_with_retry_notifies_on_retry(capsys):
     from src.telegram_manager import _send_file_with_retry
     client = MagicMock()
