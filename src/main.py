@@ -55,7 +55,46 @@ if hasattr(sys.stderr, "reconfigure"):
 
 console = Console()
 
-def process_download_item(selected_item: dict, active_url: str, config: dict, summary: dict, preset_sub_choice: str = None, preset_download_dir: str = None) -> None:
+def handle_existing_file_decision(
+    title: str,
+    expected_path: str,
+    batch_state: dict | None = None,
+) -> tuple[str, dict]:
+    if batch_state is None:
+        batch_state = {}
+
+    mode = batch_state.get("mode")
+    if mode == "skip_all":
+        return "skip", batch_state
+    if mode == "overwrite_all":
+        return "overwrite", batch_state
+
+    console.print(f"\n[bold yellow]⚠️ File '{title}' sudah ada secara lokal dan sehat.[/bold yellow]")
+    choice = questionary.select(
+        "Pilih tindakan untuk file ini:",
+        choices=[
+            "⏭ Skip (Lewati file ini)",
+            "🔄 Re-download / Timpa (Download ulang & timpa file ini)",
+            "⏭ Skip Semua (Lewati semua file yang sudah ada)",
+            "🔄 Re-download / Timpa Semua (Download ulang & timpa semua file yang sudah ada)",
+        ],
+    ).ask()
+
+    if not choice or choice.startswith("⏭ Skip (Lewati"):
+        return "skip", batch_state
+    elif choice.startswith("🔄 Re-download / Timpa (Download"):
+        return "overwrite", batch_state
+    elif choice.startswith("⏭ Skip Semua"):
+        batch_state["mode"] = "skip_all"
+        return "skip", batch_state
+    elif choice.startswith("🔄 Re-download / Timpa Semua"):
+        batch_state["mode"] = "overwrite_all"
+        return "overwrite", batch_state
+
+    return "skip", batch_state
+
+
+def process_download_item(selected_item: dict, active_url: str, config: dict, summary: dict, preset_sub_choice: str = None, preset_download_dir: str = None, batch_state: dict = None) -> None:
     raw_title = selected_item.get("title", "Unknown")
     item_url = selected_item.get("url", "")
 
@@ -165,25 +204,29 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                 if is_already_downloaded(expected_path):
                     verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
                     if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
-                        console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
-                        add_entry(
-                            title=ep_title,
-                            media_type="episode",
-                            season=season_num,
-                            episode=ep["episode_num"],
-                            status="skipped",
-                            m3u8_url="",
-                            output_path=expected_path,
-                            page_url=item_url
-                        )
-                        summary["video_skipped"] += 1
-                        summary["items"].append({
-                            "title": ep_title,
-                            "video_status": "SKIPPED",
-                            "video_error": None,
-                            "subtitles": []
-                        })
-                        continue
+                        action, batch_state = handle_existing_file_decision(ep_title, expected_path, batch_state)
+                        if action == "skip":
+                            console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
+                            add_entry(
+                                title=ep_title,
+                                media_type="episode",
+                                season=season_num,
+                                episode=ep["episode_num"],
+                                status="skipped",
+                                m3u8_url="",
+                                output_path=expected_path,
+                                page_url=item_url
+                            )
+                            summary["video_skipped"] += 1
+                            summary["items"].append({
+                                "title": ep_title,
+                                "video_status": "SKIPPED",
+                                "video_error": None,
+                                "subtitles": []
+                            })
+                            continue
+                        else:
+                            console.print(f"[bold cyan]🔄 Re-download / Overwrite dipilih untuk {ep_title}. Download ulang...[/bold cyan]")
                     else:
                         console.print(f"[bold yellow]⚠️ Episode {ep['episode_num']} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
 
@@ -349,25 +392,29 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
     if is_already_downloaded(expected_path):
         verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
         if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
-            console.print(f"[yellow]⏭ {clean_title} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
-            add_entry(
-                title=clean_title,
-                media_type="movie",
-                season=None,
-                episode=None,
-                status="skipped",
-                m3u8_url="",
-                output_path=expected_path,
-                page_url=selected_item["url"]
-            )
-            summary["video_skipped"] += 1
-            summary["items"].append({
-                "title": clean_title,
-                "video_status": "SKIPPED",
-                "video_error": None,
-                "subtitles": []
-            })
-            return
+            action, batch_state = handle_existing_file_decision(clean_title, expected_path, batch_state)
+            if action == "skip":
+                console.print(f"[yellow]⏭ {clean_title} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
+                add_entry(
+                    title=clean_title,
+                    media_type="movie",
+                    season=None,
+                    episode=None,
+                    status="skipped",
+                    m3u8_url="",
+                    output_path=expected_path,
+                    page_url=selected_item["url"]
+                )
+                summary["video_skipped"] += 1
+                summary["items"].append({
+                    "title": clean_title,
+                    "video_status": "SKIPPED",
+                    "video_error": None,
+                    "subtitles": []
+                })
+                return
+            else:
+                console.print(f"[bold cyan]🔄 Re-download / Overwrite dipilih untuk {clean_title}. Download ulang...[/bold cyan]")
         else:
             console.print(f"[bold yellow]⚠️ {clean_title} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
 
@@ -632,6 +679,7 @@ def handle_cart(active_url: str, config: dict) -> None:
                 "sub_failed": 0,
                 "items": []
             }
+            batch_state = {}
             # Download item one by one and remove on success
             for idx, item in enumerate(cart_items):
                 console.print(f"\n[bold cyan]=== Mengunduh Item Keranjang {idx+1}/{len(cart_items)}: {item['title']} ===[/bold cyan]")
@@ -645,7 +693,7 @@ def handle_cart(active_url: str, config: dict) -> None:
                     else:
                         item_preset_dir = default_movie_dir
 
-                process_download_item(item, active_url, config, summary, preset_sub_choice=preset_sub_choice, preset_download_dir=item_preset_dir)
+                process_download_item(item, active_url, config, summary, preset_sub_choice=preset_sub_choice, preset_download_dir=item_preset_dir, batch_state=batch_state)
 
                 # Check if this item had any failures in this step
                 failures = [i for i in summary["items"] if i["video_status"] == "FAILED" and item["title"] in i["title"]]

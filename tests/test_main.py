@@ -57,6 +57,37 @@ def test_handle_featured_success(mock_fetch, mock_press, mock_select):
     mock_press_obj.ask.assert_called_once()
 
 
+def test_handle_existing_file_decision_skip_single():
+    from src.main import handle_existing_file_decision
+    with patch("src.main.questionary.select") as mock_sel:
+        mock_sel.return_value.ask.return_value = "⏭ Skip (Lewati file ini)"
+        action, state = handle_existing_file_decision("Test Movie", "/path/to/movie.mp4", {})
+        assert action == "skip"
+        assert state.get("mode") is None
+
+
+def test_handle_existing_file_decision_overwrite_all():
+    from src.main import handle_existing_file_decision
+    state = {}
+    with patch("src.main.questionary.select") as mock_sel:
+        mock_sel.return_value.ask.return_value = "🔄 Re-download / Timpa Semua (Download ulang & timpa semua file yang sudah ada)"
+        action, state = handle_existing_file_decision("Test Movie 1", "/path/to/movie1.mp4", state)
+        assert action == "overwrite"
+        assert state.get("mode") == "overwrite_all"
+
+    action2, state2 = handle_existing_file_decision("Test Movie 2", "/path/to/movie2.mp4", state)
+    assert action2 == "overwrite"
+    assert state2.get("mode") == "overwrite_all"
+
+
+def test_handle_existing_file_decision_skip_all():
+    from src.main import handle_existing_file_decision
+    state = {"mode": "skip_all"}
+    action, state = handle_existing_file_decision("Test Movie", "/path/to/movie.mp4", state)
+    assert action == "skip"
+    assert state.get("mode") == "skip_all"
+
+
 @patch("src.main.download_media_stream")
 @patch("src.main.extract_video_sources")
 @patch("src.main.set_download_dir")
@@ -767,11 +798,12 @@ def test_handle_item_download_calls_print_download_summary_tv_series(
     assert summary_data["items"][1]["video_status"] == "FAILED"
 
 
+@patch("src.main.handle_existing_file_decision", return_value=("skip", {}))
 @patch("src.main.extract_video_sources")
 @patch("src.main.verify_media_file")
 @patch("src.main.is_already_downloaded")
 @patch("src.main.add_entry")
-def test_process_download_item_movie_instant_skip(mock_add_entry, mock_is_dl, mock_verify, mock_extract):
+def test_process_download_item_movie_instant_skip(mock_add_entry, mock_is_dl, mock_verify, mock_extract, mock_decision):
     mock_is_dl.return_value = True
     mock_verify.return_value = {"video_status": "HEALTHY", "missing_subtitles": []}
     
