@@ -1710,10 +1710,28 @@ def handle_telegram_delete_local(config: dict) -> None:
             except (PermissionError, OSError) as exc:
                 console.print(f"[bold red]❌ Gagal menghapus '{path}': File sedang dibuka/terkunci oleh aplikasi lain (Jellyfin, VLC, Windows Explorer, dll).[/bold red]")
                 continue
+
+        # Clean up associated subtitle files (.srt / .vtt)
+        base_no_ext, _ = os.path.splitext(path)
+        parent_dir = os.path.dirname(path)
+        if os.path.exists(parent_dir):
+            base_name = os.path.basename(base_no_ext)
+            for filename in os.listdir(parent_dir):
+                if filename.startswith(base_name) and filename.endswith((".srt", ".vtt")):
+                    sub_file = os.path.join(parent_dir, filename)
+                    try:
+                        os.remove(sub_file)
+                    except OSError:
+                        pass
+
+        # Clean up empty parent directory (and grand-parent directory if empty)
         parent = os.path.dirname(path)
         try:
-            if parent and not os.listdir(parent):
+            if parent and os.path.exists(parent) and not os.listdir(parent):
                 os.rmdir(parent)
+                grandparent = os.path.dirname(parent)
+                if grandparent and os.path.exists(grandparent) and not os.listdir(grandparent):
+                    os.rmdir(grandparent)
         except OSError:
             pass
     console.print(f"\n[bold]Selesai: {deleted} file dihapus.[/bold]")
