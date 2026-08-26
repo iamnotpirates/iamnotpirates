@@ -1007,3 +1007,31 @@ def test_scan_backups_no_reverse_full_history_needed_only_topic():
     client = ScanSpyClient()
     tm.scan_backups(client, [{"type": "group", "target": "-100x", "topic": 5}])
     assert client.calls[0]["limit"] is None
+
+
+def test_send_file_with_retry_notifies_on_retry(capsys):
+    from src.telegram_manager import _send_file_with_retry
+    client = MagicMock()
+    client.send_file.side_effect = [
+        OSError(121, "semaphore timeout"),
+        OSError(121, "semaphore timeout"),
+        "MsgObj",
+    ]
+    res = _send_file_with_retry(client, "me", "big.7z",
+                                describe="SAO S01E01", max_retries=3)
+    assert res == "MsgObj"
+    out = capsys.readouterr().out
+    assert out.count("mencoba ulang") == 2
+    assert "SAO S01E01" in out
+
+
+def test_upload_backup_describes_parts_in_progress(monkeypatch, tmp_path):
+    import src.telegram_manager as tm
+    monkeypatch.setattr(tm, "PART_SIZE", 1300)
+    src = tmp_path / "Big.mkv"; src.write_bytes(b"v" * 3000)
+    client = RecordingClient()
+    _fake_archive(monkeypatch, 2500)
+    upload_backup(client, str(src), [],
+                  {"title": "Big", "year": "", "media_type": "movie"},
+                  [{"type": "saved", "target": "me", "topic": None}])
+    assert len(client.sent) == 2

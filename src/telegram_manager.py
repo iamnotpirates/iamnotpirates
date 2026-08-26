@@ -241,13 +241,27 @@ def create_client(config: dict):
     )
 
 
-def _send_file_with_retry(client, target, file_to_send, max_retries: int = 3, **kwargs):
+def _notify_upload_retry(describe: str, attempt: int, max_retries: int, exc: Exception) -> None:
+    try:
+        from rich.console import Console
+        Console().print(
+            f"[bold yellow]⚠️ {describe}: koneksi gagal "
+            f"({type(exc).__name__}) — mencoba ulang {attempt}/{max_retries}...[/bold yellow]"
+        )
+    except Exception:
+        print(f"⚠️ {describe}: koneksi gagal — mencoba ulang {attempt}/{max_retries}...")
+
+
+def _send_file_with_retry(client, target, file_to_send, max_retries: int = 3,
+                          describe: str = "", **kwargs):
     for attempt in range(1, max_retries + 1):
         try:
             return client.send_file(target, file_to_send, **kwargs)
-        except (OSError, ConnectionError, Exception):
+        except (OSError, ConnectionError, Exception) as exc:
             if attempt >= max_retries:
                 raise
+            if describe:
+                _notify_upload_retry(describe, attempt + 1, max_retries, exc)
             time.sleep(1 * attempt)
             is_conn = getattr(client, "is_connected", None)
             if is_conn and not is_conn():
@@ -433,6 +447,10 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
             split_dir = staging_dir
             part_files = split_file(archive_path, part_size=PART_SIZE, tmp_dir=split_dir)
 
+        item_title = meta.get("title", os.path.basename(file_path))
+        if meta.get("season") and meta.get("episode"):
+            item_title += f" S{int(meta['season']):02d}E{int(meta['episode']):02d}"
+
         def _send_video(target, reply_to, record):
             ids = []
             if part_count == 1:
@@ -440,15 +458,18 @@ def upload_backup(client, file_path: str, sub_paths: list, meta: dict,
                     client, target, archive_path, caption=caption,
                     force_document=True,
                     progress_callback=progress_callback, reply_to=reply_to,
+                    describe=item_title,
                 )
                 ids.append(msg.id)
             else:
                 for index, part_path in enumerate(part_files):
+                    part_desc = f"{item_title} (part {index + 1}/{part_count})"
                     msg = _send_file_with_retry(
                         client, target, part_path,
                         caption=caption if index == 0 else "",
                         force_document=True,
                         progress_callback=progress_callback, reply_to=reply_to,
+                        describe=part_desc,
                     )
                     ids.append(msg.id)
             if record:
