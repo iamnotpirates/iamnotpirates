@@ -768,6 +768,20 @@ def test_merge_local_entries_log_wins_on_same_key():
     assert film_a["output_path"] == "/log/a.mp4"
 
 
+def test_merge_local_entries_dedupes_same_output_path():
+    from src.telegram_manager import merge_local_entries
+    log_e = [{"title": "The Lord of the Rings: The Two Towers", "year": "", "media_type": "movie",
+              "season": None, "episode": None, "output_path": r"Z:\Film\Movies\The Two Towers (2002)\The Two Towers.mp4",
+              "file_size": 100, "backed": False, "key": "thelordoftheringsthetwotowers|||"}]
+    folder_e = [{"title": "The Lord of the Rings The Two Towers", "year": "2002", "media_type": "movie",
+                 "season": None, "episode": None, "output_path": r"Z:\Film\Movies\The Two Towers (2002)\The Two Towers.mp4",
+                 "file_size": 100, "backed": False, "key": "thelordoftheringsthetwotowers|2002||"}]
+    merged = merge_local_entries(log_e, folder_e)
+    assert len(merged) == 1
+    assert merged[0]["year"] == "2002"
+    assert merged[0]["output_path"] == r"Z:\Film\Movies\The Two Towers (2002)\The Two Towers.mp4"
+
+
 def test_build_caption_episode_includes_season_episode():
     from src.telegram_manager import build_caption
     cap = build_caption({"kind": "video", "title": "Monster", "year": "2023",

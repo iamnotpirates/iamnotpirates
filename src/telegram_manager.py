@@ -715,10 +715,46 @@ def sort_local_entries(entries: list) -> list:
 
 
 def merge_local_entries(log_entries: list, folder_entries: list) -> list:
-    merged = {e.get("key"): dict(e) for e in log_entries}
+    merged = {}
+    for entry in log_entries:
+        key = entry.get("key")
+        path = os.path.normpath(entry.get("output_path", "")).lower() if entry.get("output_path") else ""
+        item = dict(entry)
+        if key:
+            merged[key] = item
+        if path:
+            merged[path] = item
+
     for entry in folder_entries:
-        merged.setdefault(entry.get("key"), dict(entry))
-    return sort_local_entries(list(merged.values()))
+        key = entry.get("key")
+        path = os.path.normpath(entry.get("output_path", "")).lower() if entry.get("output_path") else ""
+        if path and path in merged:
+            existing = merged[path]
+            if not existing.get("year") and entry.get("year"):
+                existing["year"] = entry["year"]
+                existing["key"] = backup_key(existing["title"], existing["year"], existing.get("season"), existing.get("episode"))
+            continue
+
+        if key and key in merged:
+            existing = merged[key]
+            if not existing.get("year") and entry.get("year"):
+                existing["year"] = entry["year"]
+                existing["key"] = backup_key(existing["title"], existing["year"], existing.get("season"), existing.get("episode"))
+            continue
+
+        item = dict(entry)
+        if key:
+            merged[key] = item
+        if path:
+            merged[path] = item
+
+    seen = {}
+    for entry in merged.values():
+        k = entry.get("key") or entry.get("output_path")
+        if k not in seen:
+            seen[k] = entry
+
+    return sort_local_entries(list(seen.values()))
 
 
 def build_restore_target(config: dict, item: dict) -> tuple:
