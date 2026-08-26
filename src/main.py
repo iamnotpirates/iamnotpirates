@@ -980,6 +980,30 @@ def handle_search(active_url: str, config: dict) -> None:
 
         console.print(format_hybrid_table(rows))
 
+        if len(rows) == 1:
+            chosen = rows[0]
+            if chosen.get("__source__") == "telegram":
+                if not _confirm_or_proceed(
+                    f"Hanya 1 hasil: restore '{chosen['title']}' dari Telegram sekarang?"
+                ):
+                    continue
+                try:
+                    out_path = _restore_from_telegram(config, chosen)
+                    print_success(f"Restore selesai: {out_path}")
+                    restored_total = 1
+                except Exception as exc:
+                    print_error(f"Restore gagal: {exc}")
+                    restored_total = 0
+            else:
+                summary_auto = {
+                    "total_items": 0, "video_success": 0, "video_failed": 0,
+                    "video_skipped": 0, "sub_success": 0, "sub_failed": 0, "items": [],
+                }
+                process_download_item(chosen, active_url, config, summary_auto)
+                print_download_summary(summary_auto)
+            _pause()
+            return
+
         raw = questionary.text(
             f"Pilih nomor item (bisa lebih dari satu, contoh 1,3 — kosongkan untuk kembali):"
         ).ask()

@@ -518,3 +518,29 @@ def test_handle_telegram_search_restores_multiple_picks(
     assert mock_restore.call_count == 2
     picked_titles = {call.args[1]["title"] for call in mock_restore.call_args_list}
     assert picked_titles == {"Film A", "Film B"}
+
+
+@patch("src.main._restore_from_telegram", return_value="C:/ok/x.mp4")
+@patch("src.main.questionary.confirm")
+@patch("src.main.questionary.text")
+@patch("src.main.scan_with_spinner")
+@patch("src.main.search_content", return_value=[])
+@patch("src.main.require_telegram_ready", return_value=True)
+def test_handle_search_single_result_skips_number_input(
+    _ready, mock_sc, mock_scan, mock_text, mock_confirm, mock_restore
+):
+    from src.main import handle_search
+    mock_scan.return_value = [{
+        "title": "Only One", "year": "2024", "media_type": "movie",
+        "season": None, "episode": None, "file_size": 10, "part_count": 1,
+        "subtitles": [], "video_msg_ids": [5], "sub_msg_ids": [], "chat": "me",
+    }]
+    mock_text.return_value = MagicMock(ask=MagicMock(side_effect=[
+        "only one",   # query
+        "",           # setelah proses -> keluar loop
+    ]))
+    mock_confirm.return_value = MagicMock(ask=MagicMock(return_value=True))
+    with __import__("unittest").mock.patch("src.main.questionary.press_any_key_to_continue"):
+        handle_search("http://x", {})
+    mock_restore.assert_called_once()
+    assert mock_restore.call_args[0][1]["title"] == "Only One"
