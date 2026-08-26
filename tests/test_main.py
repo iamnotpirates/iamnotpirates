@@ -80,6 +80,25 @@ def test_precheck_existing_files_prompt_prompts_once_when_existing():
         mock_sel.assert_called_once()
 
 
+def test_precheck_existing_files_prompt_custom_selection():
+    from src.main import precheck_existing_files_prompt
+    with patch("src.main.is_already_downloaded", return_value=True), \
+         patch("src.main.verify_media_file", return_value={"video_status": "HEALTHY", "missing_subtitles": []}), \
+         patch("src.main.questionary.select") as mock_sel, \
+         patch("src.main.questionary.checkbox") as mock_chk:
+        mock_sel.return_value.ask.return_value = "⚙️ Pilih kustom per-item (Pilih mana yang di-skip & mana yang di-timpa)"
+        mock_chk.return_value.ask.return_value = ["1. Movie 1 (/fake/path1.mp4)"]
+
+        mode, state = precheck_existing_files_prompt([
+            {"expected_path": "/fake/path1.mp4", "title": "Movie 1"},
+            {"expected_path": "/fake/path2.mp4", "title": "Movie 2"}
+        ])
+        assert state.get("file_actions") == {
+            "/fake/path1.mp4": "overwrite",
+            "/fake/path2.mp4": "skip"
+        }
+
+
 def test_handle_existing_file_decision_skip_single():
     from src.main import handle_existing_file_decision
     with patch("src.main.questionary.select") as mock_sel:

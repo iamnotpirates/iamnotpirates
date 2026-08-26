@@ -87,19 +87,50 @@ def precheck_existing_files_prompt(items: list[dict], batch_state: dict | None =
         batch_state.setdefault("mode", "skip_all")
         return "skip", batch_state
 
-    if batch_state.get("mode"):
-        return ("overwrite" if batch_state["mode"] == "overwrite_all" else "skip"), batch_state
+    if batch_state.get("mode") or batch_state.get("file_actions"):
+        return ("overwrite" if batch_state.get("mode") == "overwrite_all" else "skip"), batch_state
 
     console.print(
         f"\n[bold yellow]⚠️ Terdeteksi {len(existing_items)} dari {len(items)} item sudah ada di disk secara lokal.[/bold yellow]"
     )
-    choice = questionary.select(
-        "Pilih tindakan untuk item yang sudah ada di disk:",
-        choices=[
+
+    if len(existing_items) == 1:
+        choices = [
+            "⏭ Skip (Lewati file yang sudah ada)",
+            "🔄 Re-download & Timpa file lama",
+        ]
+    else:
+        choices = [
             "⏭ Skip semua item yang sudah ada (Default)",
             "🔄 Re-download & Timpa semua file lama",
-        ],
+            "⚙️ Pilih kustom per-item (Pilih mana yang di-skip & mana yang di-timpa)",
+        ]
+
+    choice = questionary.select(
+        "Pilih tindakan untuk item yang sudah ada di disk:",
+        choices=choices,
     ).ask()
+
+    if choice and choice.startswith("⚙️ Pilih kustom per-item"):
+        item_by_path = {it.get("expected_path"): it for it in items if it.get("expected_path")}
+        chk_choices = []
+        for idx, path in enumerate(existing_items, start=1):
+            it = item_by_path.get(path, {})
+            title = it.get("title") or os.path.basename(path)
+            chk_choices.append(f"{idx}. {title} ({path})")
+
+        selected_labels = questionary.checkbox(
+            "Pilih file yang ingin DI-DOWNLOAD ULANG (Uncheck = Skip):",
+            choices=chk_choices,
+        ).ask() or []
+
+        selected_indices = {int(lbl.split(".")[0]) - 1 for lbl in selected_labels if lbl.split(".")[0].isdigit()}
+        file_actions = {}
+        for idx, path in enumerate(existing_items):
+            file_actions[path] = "overwrite" if idx in selected_indices else "skip"
+
+        batch_state["file_actions"] = file_actions
+        return "custom", batch_state
 
     if choice and choice.startswith("🔄 Re-download"):
         batch_state["mode"] = "overwrite_all"
@@ -283,7 +314,10 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                 is_dl, verify_res = get_cached_media_status(expected_path, required_sub_mode=selected_sub_choice, batch_state=batch_state)
                 if is_dl:
                     if verify_res and verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
-                        action = "overwrite" if batch_state.get("mode") == "overwrite_all" else "skip"
+                        if expected_path in batch_state.get("file_actions", {}):
+                            action = batch_state["file_actions"][expected_path]
+                        else:
+                            action = "overwrite" if batch_state.get("mode") == "overwrite_all" else "skip"
                         if action == "skip":
                             console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
                             add_entry(
