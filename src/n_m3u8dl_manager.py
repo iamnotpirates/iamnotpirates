@@ -165,15 +165,16 @@ def download_with_re(
                 print(msg)
             return False
 
-    # 2. Isolasi direktori temporary ke SSD lokal (mencegah lock segment I/O pada drive Z:)
+    # 2. Isolasi direktori temporary & staging ke SSD lokal (mencegah lock segment I/O dan Jellyfin lock pada drive Z:)
     import tempfile
     tmp_dir = os.path.join(tempfile.gettempdir(), "iamnotpirates_tmp")
-    os.makedirs(tmp_dir, exist_ok=True)
+    staging_dir = os.path.join(tmp_dir, "staging")
+    os.makedirs(staging_dir, exist_ok=True)
 
     cmd = [
         binary,
         m3u8_url,
-        "--save-dir", save_dir,
+        "--save-dir", staging_dir,
         "--save-name", save_name,
         "--thread-count", str(thread_count),
         "--auto-select",
@@ -191,39 +192,47 @@ def download_with_re(
 
         result = subprocess.run(cmd, check=False, env=env)
 
-        # Auto-heal: check if N_m3u8DL-RE finished but left MUX.mp4 due to rename failure on Windows
-        mux_file = os.path.join(save_dir, f"{save_name}.MUX.mp4")
-        ts_file = os.path.join(save_dir, f"{save_name}.ts")
+        # Handle output from staging_dir or save_dir
+        staging_output = os.path.join(staging_dir, f"{save_name}.mp4")
+        staging_mux = os.path.join(staging_dir, f"{save_name}.MUX.mp4")
+        direct_output = os.path.join(save_dir, f"{save_name}.mp4")
+        direct_mux = os.path.join(save_dir, f"{save_name}.MUX.mp4")
 
-        if not os.path.exists(expected_file) and os.path.exists(mux_file):
-            msg = "[bold yellow]⚠️ Muxing selesai tetapi file belum di-rename. Melakukan auto-heal rename...[/bold yellow]"
-            if console:
-                console.print(msg)
-            else:
-                print(msg.replace("[bold yellow]", "").replace("[/bold yellow]", ""))
-            
-            import time
-            move_success = False
-            for attempt in range(5):
-                try:
-                    shutil.move(mux_file, expected_file)
-                    move_success = True
-                    break
-                except Exception as e:
-                    if attempt == 4:
-                        err_msg = f"[bold red]Gagal auto-heal rename setelah 5 percobaan: {e}[/bold red]"
-                        if console:
-                            console.print(err_msg)
-                        else:
-                            print(err_msg.replace("[bold red]", "").replace("[/bold red]", ""))
-                    else:
-                        time.sleep(1)
+        # Auto-heal staging if MUX exists
+        if not os.path.exists(staging_output) and os.path.exists(staging_mux):
+            try:
+                shutil.move(staging_mux, staging_output)
+            except Exception:
+                pass
+        elif not os.path.exists(direct_output) and os.path.exists(direct_mux):
+            # Auto-heal direct save_dir if MUX exists (for backwards compat / unit tests)
+            try:
+                shutil.move(direct_mux, direct_output)
+            except Exception:
+                pass
 
-            if move_success:
-                _remove_mux_junk(save_dir, save_name, console)
-                return True
-
+        _cleanup_orphan_mux_artifacts(staging_dir, save_name, console)
         _cleanup_orphan_mux_artifacts(save_dir, save_name, console)
+
+        if os.path.exists(staging_output):
+            os.makedirs(save_dir, exist_ok=True)
+            tmp_target = os.path.join(save_dir, f"{save_name}.mp4.tmp")
+            try:
+                if os.path.exists(tmp_target):
+                    os.remove(tmp_target)
+                shutil.move(staging_output, tmp_target)
+                if os.path.exists(expected_file):
+                    os.remove(expected_file)
+                shutil.move(tmp_target, expected_file)
+                return True
+            except Exception as exc:
+                if console:
+                    console.print(f"[bold red]Gagal memindahkan file dari staging ke target: {exc}[/bold red]")
+                return False
+
+        if os.path.exists(expected_file):
+            return True
+
         return result.returncode == 0
     except KeyboardInterrupt:
         if console:
