@@ -1389,14 +1389,22 @@ def handle_telegram_manual_backup(config: dict) -> None:
     if not entries:
         console.print("[yellow]Tidak ada file lokal yang tercatat sukses di log.[/yellow]")
         return
-    console.print(format_local_delete_table(entries))
+    unbacked_entries = [e for e in entries if not e.get("backed")]
+    if not unbacked_entries:
+        console.print("[bold green]✓ Semua file lokal (total "
+                      f"{len(entries)} item) sudah ter-backup di Telegram![/bold green]")
+        _pause()
+        return
+
+    if len(unbacked_entries) < len(entries):
+        backed_count = len(entries) - len(unbacked_entries)
+        console.print(f"[dim]ℹ️ {backed_count} item yang sudah ter-backup disembunyikan dari daftar pilihan.[/dim]")
+
+    console.print(format_local_delete_table(unbacked_entries))
     labels = []
-    for idx, entry in enumerate(entries, start=1):
+    for idx, entry in enumerate(unbacked_entries, start=1):
         label_title = format_entry_label(entry)
-        if entry["backed"]:
-            labels.append(f"{idx}. ✅ {label_title} (duplikat)")
-        else:
-            labels.append(f"{idx}. {label_title}")
+        labels.append(f"{idx}. {label_title}")
     picked = questionary.checkbox(
         "Pilih item untuk di-backup ke Telegram (SPACE pilih, ENTER lanjut):",
         choices=labels
@@ -1414,7 +1422,7 @@ def handle_telegram_manual_backup(config: dict) -> None:
     client = _connected_client(config)
     try:
         for pos, idx in enumerate(chosen_indices, start=1):
-            entry = entries[idx]
+            entry = unbacked_entries[idx]
             if not os.path.exists(entry["output_path"]):
                 print_error(f"File tidak ditemukan, di-skip: {entry['output_path']}")
                 fail_count += 1

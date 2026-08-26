@@ -298,7 +298,7 @@ def test_manual_backup_calls_upload_per_selection(tmp_path, monkeypatch):
 
     with patch("src.main.questionary.checkbox") as mock_check, \
          patch("src.main.questionary.press_any_key_to_continue"):
-        mock_check.return_value = MagicMock(ask=MagicMock(return_value=["1. ✅ Safe Film (duplikat)"]))
+        mock_check.return_value = MagicMock(ask=MagicMock(return_value=["1. Safe Film (2024)"]))
         main_mod.handle_telegram_manual_backup({})
 
     assert len(uploads) == 1
