@@ -398,8 +398,7 @@ def scan_backups(client, destinations: list) -> list:
         topic = destination.get("topic")
         reply_to = int(topic) if topic and str(topic).isdigit() else None
         current = None
-        for msg in client.iter_messages(target, reverse=True, limit=None,
-                                        reply_to=reply_to):
+        for msg in client.iter_messages(target, limit=None, reply_to=reply_to):
             if getattr(msg, "document", None) is None:
                 continue
             meta = parse_caption(getattr(msg, "message", None))
@@ -431,6 +430,10 @@ def scan_backups(client, destinations: list) -> list:
                 continue
             if current and len(current["video_msg_ids"]) < current.get("part_count", 1):
                 current["video_msg_ids"].append(msg.id)
+
+    for item in items:
+        item["video_msg_ids"].sort()
+        item["sub_msg_ids"].sort()
     return items
 
 

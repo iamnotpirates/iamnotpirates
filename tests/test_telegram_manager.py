@@ -298,7 +298,7 @@ def test_scan_groups_parts_subs_and_skips_foreign():
     ]
     client = FakeClient({"me": messages})
     items = scan_backups(client, DESTS)
-    assert client.iter_calls == [("me", True, None)]
+    assert client.iter_calls == [("me", None, None)]
     assert len(items) == 1
     item = items[0]
     assert item["title"] == "Film A"
@@ -1047,6 +1047,22 @@ def test_scan_backups_no_reverse_full_history_needed_only_topic():
     client = ScanSpyClient()
     tm.scan_backups(client, [{"type": "group", "target": "-100x", "topic": 5}])
     assert client.calls[0]["limit"] is None
+
+
+def test_scan_backups_without_reverse_finds_newest_first():
+    from src.telegram_manager import scan_backups, build_caption
+    DESTS = [{"type": "saved", "target": "me", "topic": None}]
+    meta = {
+        "kind": "video", "title": "A Shop for Killers", "year": "2024",
+        "media_type": "episode", "season": 1, "episode": 1,
+        "file_size": 300000000, "part_count": 1, "subtitles": [], "archive": True,
+    }
+    msg = FakeMsg(100, caption=build_caption(meta), file_name="AShopForKillers.7z")
+    client = FakeClient({"me": [msg]})
+    items = scan_backups(client, DESTS)
+    assert len(items) == 1
+    assert items[0]["title"] == "A Shop for Killers"
+    assert items[0]["video_msg_ids"] == [100]
 
 
 def test_send_file_with_retry_does_not_retry_fatal_rpc_error():
