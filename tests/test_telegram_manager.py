@@ -1062,6 +1062,24 @@ def test_scan_backups_without_reverse_finds_newest_first():
     assert items[0]["video_msg_ids"] == [100]
 
 
+def test_sort_local_entries_by_title_season_episode():
+    from src.telegram_manager import sort_local_entries
+    unsorted = [
+        {"title": "Sword Art Online", "year": "2020", "season": 1, "episode": 2},
+        {"title": "A Shop for Killers", "year": "2024", "season": 1, "episode": 1},
+        {"title": "Sword Art Online", "year": "2020", "season": 1, "episode": 1},
+        {"title": "Avatar", "year": "2009", "season": None, "episode": None},
+    ]
+    res = sort_local_entries(unsorted)
+    titles = [(r["title"], r.get("season"), r.get("episode")) for r in res]
+    assert titles == [
+        ("A Shop for Killers", 1, 1),
+        ("Avatar", None, None),
+        ("Sword Art Online", 1, 1),
+        ("Sword Art Online", 1, 2),
+    ]
+
+
 def test_send_file_with_retry_does_not_retry_fatal_rpc_error():
     from src.telegram_manager import _send_file_with_retry
     class ChatWriteForbiddenError(Exception):

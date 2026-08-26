@@ -281,6 +281,7 @@ def test_manual_backup_calls_upload_per_selection(tmp_path, monkeypatch):
     real_file.write_bytes(b"x" * 5)
     entries = [dict(LOCAL_ENTRIES[0], output_path=str(real_file))]
     monkeypatch.setattr(main_mod, "collect_local_entries", lambda: entries)
+    monkeypatch.setattr(main_mod, "collect_folder_entries", lambda dirs: [])
     monkeypatch.setattr(main_mod, "scan_with_spinner", lambda cfg: [])
     monkeypatch.setattr(main_mod, "require_telegram_ready", lambda cfg: True)
 
@@ -312,6 +313,7 @@ def test_delete_local_requires_typed_confirmation_for_unbacked(tmp_path, monkeyp
     real_risky.write_bytes(b"y" * 6)
     entries = [dict(LOCAL_ENTRIES[1], output_path=str(real_risky))]
     monkeypatch.setattr(main_mod, "collect_local_entries", lambda: entries)
+    monkeypatch.setattr(main_mod, "collect_folder_entries", lambda dirs: [])
     monkeypatch.setattr(main_mod, "scan_with_spinner", lambda cfg: [])
     monkeypatch.setattr(main_mod, "require_telegram_ready", lambda cfg: True)
 
@@ -332,6 +334,7 @@ def test_delete_local_wrong_word_aborts(tmp_path, monkeypatch):
     real_risky.write_bytes(b"y" * 6)
     entries = [dict(LOCAL_ENTRIES[1], output_path=str(real_risky))]
     monkeypatch.setattr(main_mod, "collect_local_entries", lambda: entries)
+    monkeypatch.setattr(main_mod, "collect_folder_entries", lambda dirs: [])
     monkeypatch.setattr(main_mod, "scan_with_spinner", lambda cfg: [])
     monkeypatch.setattr(main_mod, "require_telegram_ready", lambda cfg: True)
 

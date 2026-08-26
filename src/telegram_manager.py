@@ -702,11 +702,23 @@ def collect_folder_entries(scan_dirs: list) -> list:
     return list(best.values())
 
 
+def sort_local_entries(entries: list) -> list:
+    return sorted(
+        entries,
+        key=lambda x: (
+            (x.get("title") or "").strip().lower(),
+            str(x.get("year") or ""),
+            x.get("season") if x.get("season") is not None else -1,
+            x.get("episode") if x.get("episode") is not None else -1,
+        ),
+    )
+
+
 def merge_local_entries(log_entries: list, folder_entries: list) -> list:
     merged = {e.get("key"): dict(e) for e in log_entries}
     for entry in folder_entries:
         merged.setdefault(entry.get("key"), dict(entry))
-    return list(merged.values())
+    return sort_local_entries(list(merged.values()))
 
 
 def build_restore_target(config: dict, item: dict) -> tuple:
