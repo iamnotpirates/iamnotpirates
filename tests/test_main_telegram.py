@@ -544,3 +544,30 @@ def test_handle_search_single_result_skips_number_input(
         handle_search("http://x", {})
     mock_restore.assert_called_once()
     assert mock_restore.call_args[0][1]["title"] == "Only One"
+
+
+@patch("src.main.tg_disconnect")
+@patch("src.main.upload_backup", side_effect=[KeyboardInterrupt(), "ok"])
+@patch("src.main._connected_client")
+@patch("src.main.get_destinations", return_value=[{"type": "saved", "target": "me"}])
+@patch("src.main.require_telegram_ready", return_value=True)
+@patch("src.main.questionary.press_any_key_to_continue")
+def test_manual_backup_ctrl_c_aborts_batch_gracefully(
+    _press, _ready, _dests, mock_client, mock_upload, _disc, tmp_path
+):
+    e1 = tmp_path / "e01.mkv"; e1.write_bytes(b"a")
+    e2 = tmp_path / "e02.mkv"; e2.write_bytes(b"b")
+    from src.main import handle_telegram_manual_backup
+    entries = [
+        {"title": "SAO E01", "year": "", "media_type": "episode", "season": 1,
+         "episode": 1, "output_path": str(e1), "file_size": 1, "backed": False},
+        {"title": "SAO E02", "year": "", "media_type": "episode", "season": 1,
+         "episode": 2, "output_path": str(e2), "file_size": 1, "backed": False},
+    ]
+    with patch("src.main._local_listing_with_backup_status", return_value=entries), \
+         patch("src.main.format_local_delete_table"), \
+         patch("src.main.questionary.checkbox") as mock_cb, \
+         patch("builtins.print"):
+        mock_cb.return_value.ask.return_value = ["1. SAO E01", "2. SAO E02"]
+        handle_telegram_manual_backup({})
+    assert mock_upload.call_count == 1

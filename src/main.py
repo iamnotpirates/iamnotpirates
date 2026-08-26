@@ -1417,6 +1417,10 @@ def handle_telegram_manual_backup(config: dict) -> None:
                     upload_backup(client, entry["output_path"], sub_paths, meta, destinations, progress_callback=cb)
                 print_success(f"Berhasil backup: {entry['title']}")
                 success_count += 1
+            except KeyboardInterrupt:
+                console.print(f"\n[bold yellow]⚠️ Dibatalkan saat meng-upload {entry['title']} — "
+                              f"sisa batch dilewati.[/bold yellow]")
+                break
             except Exception as exc:
                 print_error(f"Gagal backup {entry['title']}: {exc}")
                 fail_count += 1
