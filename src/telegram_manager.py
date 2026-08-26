@@ -39,8 +39,17 @@ def build_caption(meta: dict) -> str:
 
     # Telegram caption limit is 1024 chars. Stay under 1000.
     caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
+    if len(caption) > 700:
+        # For 7z archives or large metadata, omit heavy redundant file list to preserve title
+        if payload.get("archive"):
+            subs = payload.get("subtitles")
+            if isinstance(subs, list):
+                payload["sub_count"] = len(subs)
+                payload.pop("subtitles", None)
+            payload.pop("filename", None)
+            caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
+
     if len(caption) > 1000:
-        # Step 1: Truncate subtitle list to max 3 items or empty if needed
         subs = payload.get("subtitles")
         if isinstance(subs, list) and len(subs) > 3:
             payload["subtitles"] = subs[:3]
@@ -50,12 +59,10 @@ def build_caption(meta: dict) -> str:
             payload["subtitles"] = []
             caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
 
-        # Step 2: Truncate filename if present
         if len(caption) > 1000 and payload.get("filename"):
             payload["filename"] = payload["filename"][:50] + "..."
             caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
 
-        # Step 3: Truncate title in payload & title_line
         if len(caption) > 1000:
             if len(title_line) > 100:
                 title_line = title_line[:97] + "..."
@@ -63,7 +70,6 @@ def build_caption(meta: dict) -> str:
                 payload["title"] = str(payload["title"])[:97] + "..."
             caption = f"{title_line}\n\n```json\n{json.dumps(payload, ensure_ascii=False)}\n```"
 
-        # Final safety net: strictly cut caption at 1024
         if len(caption) > 1024:
             caption = caption[:1024]
 

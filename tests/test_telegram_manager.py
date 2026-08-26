@@ -777,6 +777,30 @@ def test_build_caption_episode_includes_season_episode():
     assert '"kind": "video"' in cap
 
 
+def test_build_caption_optimized_for_long_anime_titles():
+    from src.telegram_manager import build_caption, parse_caption
+    long_title = "Kaguya-sama wa Kokurasetai: Tensai-tachi no Renai Zunousen - Ultra Romantic Season 3 Extended Edition"
+    meta = {
+        "kind": "video",
+        "title": long_title,
+        "year": "2022",
+        "media_type": "episode",
+        "season": 3,
+        "episode": 12,
+        "file_size": 450000000,
+        "part_count": 1,
+        "subtitles": ["Kaguya_Indo.srt", "Kaguya_Eng.srt"],
+        "archive": True,
+        "filename": "Kaguya_S03E12_1080p.mkv",
+    }
+    cap = build_caption(meta)
+    assert len(cap) <= 1000
+    assert long_title in cap
+    parsed = parse_caption(cap)
+    assert parsed["title"] == long_title
+    assert parsed.get("archive") is True
+
+
 def test_build_caption_respects_telegram_1024_char_limit():
     from src.telegram_manager import build_caption, parse_caption
     huge_subtitles = [f"Sword.Art.Online.S01E01.1080p.WEBRip.x264.AAC.Subtitle.Indonesian.Language.Track.{i}.srt" for i in range(50)]
