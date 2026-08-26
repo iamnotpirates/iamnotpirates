@@ -1685,9 +1685,13 @@ def handle_telegram_delete_local(config: dict) -> None:
             ok = _confirm_or_proceed(f"Hapus '{path}'? (sudah aman di Telegram)")
             if not ok:
                 continue
-            os.remove(path)
-            deleted += 1
-            print_success(f"Dihapus: {path}")
+            try:
+                os.remove(path)
+                deleted += 1
+                print_success(f"Dihapus: {path}")
+            except (PermissionError, OSError) as exc:
+                console.print(f"[bold red]❌ Gagal menghapus '{path}': File sedang dibuka/terkunci oleh aplikasi lain (Jellyfin, VLC, Windows Explorer, dll).[/bold red]")
+                continue
         else:
             console.print(f"\n[bold red]⛔ PERINGATAN: '{entry['title']}' TIDAK ditemukan di Telegram![/bold red]")
             console.print("[bold red]Jika dihapus, file hilang PERMANEN dan tidak bisa dipulihkan![/bold red]")
@@ -1699,9 +1703,13 @@ def handle_telegram_delete_local(config: dict) -> None:
             if typed != "HAPUS":
                 console.print("[yellow]Konfirmasi salah — penghapusan dibatalkan.[/yellow]")
                 continue
-            os.remove(path)
-            deleted += 1
-            print_success(f"Dihapus permanen: {path}")
+            try:
+                os.remove(path)
+                deleted += 1
+                print_success(f"Dihapus permanen: {path}")
+            except (PermissionError, OSError) as exc:
+                console.print(f"[bold red]❌ Gagal menghapus '{path}': File sedang dibuka/terkunci oleh aplikasi lain (Jellyfin, VLC, Windows Explorer, dll).[/bold red]")
+                continue
         parent = os.path.dirname(path)
         try:
             if parent and not os.listdir(parent):
