@@ -3,6 +3,7 @@ import re
 from curl_cffi import requests
 from src.n_m3u8dl_manager import download_with_re
 from src.download_log import is_already_downloaded
+from src.ui import print_error
 
 def convert_vtt_to_srt(vtt_content: str) -> str:
     """Converts WebVTT subtitle content string to SubRip (SRT) format."""
@@ -79,7 +80,8 @@ def download_media_stream(
     title: str,
     year: str = "N/A",
     quality: str = "Best Available",
-    create_subfolder: bool = True
+    create_subfolder: bool = True,
+    overwrite: bool = False
 ) -> str | None:
     """Downloads m3u8 video stream using N_m3u8DL-RE.
     Returns target video filepath on success, None on error.
@@ -99,7 +101,13 @@ def download_media_stream(
     os.makedirs(target_folder, exist_ok=True)
     expected_output = os.path.join(target_folder, f"{base_filename}.mp4")
 
-    if is_already_downloaded(expected_output):
+    if overwrite and os.path.exists(expected_output):
+        try:
+            os.remove(expected_output)
+        except (PermissionError, OSError):
+            print_error(f"File sedang dibuka atau terkunci oleh aplikasi lain (seperti Video Player atau Windows Explorer): {expected_output}")
+            return None
+    elif not overwrite and is_already_downloaded(expected_output):
         return expected_output
 
     success = download_with_re(m3u8_url, target_folder, base_filename)

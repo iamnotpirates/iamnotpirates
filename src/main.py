@@ -392,7 +392,7 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                 m3u8_url = m3u8_urls[0]
 
                 console.print(f"[bold green]Memulai download Episode {ep['episode_num']} ke {season_dir}...[/bold green]")
-                video_path = download_media_stream(m3u8_url, season_dir, base_filename, "N/A", "Best Available", create_subfolder=False)
+                video_path = download_media_stream(m3u8_url, season_dir, base_filename, "N/A", "Best Available", create_subfolder=False, overwrite=is_dl)
 
                 if video_path and os.path.exists(video_path):
                     print_success(f"Berhasil mendownload Episode {ep['episode_num']}: {video_path}")
@@ -588,7 +588,7 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
 
     # --- Trigger Download ---
     console.print(f"[bold green]Memulai download {clean_title} ke {target_dir}...[/bold green]")
-    video_path = download_media_stream(m3u8_url, target_dir, clean_title, year, "Best Available")
+    video_path = download_media_stream(m3u8_url, target_dir, clean_title, year, "Best Available", overwrite=is_dl)
 
     sub_results = []
     if video_path and os.path.exists(video_path):

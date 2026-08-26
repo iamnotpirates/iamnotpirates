@@ -174,7 +174,8 @@ def test_handle_item_download(
         "C:\\Users\\test\\Downloads",
         "Test Movie",
         "2026",
-        "Best Available"
+        "Best Available",
+        overwrite=False
     )
     mock_add_entry.assert_called_once()
     args, kwargs = mock_add_entry.call_args
