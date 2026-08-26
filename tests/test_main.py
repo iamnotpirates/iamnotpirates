@@ -57,6 +57,29 @@ def test_handle_featured_success(mock_fetch, mock_press, mock_select):
     mock_press_obj.ask.assert_called_once()
 
 
+def test_precheck_existing_files_prompt_none_exist():
+    from src.main import precheck_existing_files_prompt
+    with patch("src.main.is_already_downloaded", return_value=False):
+        mode, state = precheck_existing_files_prompt([{"expected_path": "/fake/path.mp4"}])
+        assert mode == "skip"
+        assert state.get("mode") == "skip_all"
+
+
+def test_precheck_existing_files_prompt_prompts_once_when_existing():
+    from src.main import precheck_existing_files_prompt
+    with patch("src.main.is_already_downloaded", return_value=True), \
+         patch("src.main.verify_media_file", return_value={"video_status": "HEALTHY", "missing_subtitles": []}), \
+         patch("src.main.questionary.select") as mock_sel:
+        mock_sel.return_value.ask.return_value = "🔄 Re-download & Timpa semua file lama"
+        mode, state = precheck_existing_files_prompt([
+            {"expected_path": "/fake/path1.mp4"},
+            {"expected_path": "/fake/path2.mp4"}
+        ])
+        assert mode == "overwrite"
+        assert state.get("mode") == "overwrite_all"
+        mock_sel.assert_called_once()
+
+
 def test_handle_existing_file_decision_skip_single():
     from src.main import handle_existing_file_decision
     with patch("src.main.questionary.select") as mock_sel:
@@ -372,10 +395,10 @@ def test_handle_item_download_tv_series_success(
         {"m3u8_urls": ["https://stream.example.com/ep2.m3u8"], "subtitles": [{"lang": "English", "url": "https://sub.example.com/ep2.vtt"}]},
     ]
 
-    mock_format_paths.side_effect = [
-        (str(tmp_path / "Breaking Bad (2008)" / "Season 01"), "Breaking Bad - S01E01"),
-        (str(tmp_path / "Breaking Bad (2008)" / "Season 01"), "Breaking Bad - S01E02"),
-    ]
+    mock_format_paths.side_effect = lambda title, yr, s, ep, tdir: (
+        str(tmp_path / "Breaking Bad (2008)" / f"Season {s:02d}"),
+        f"Breaking Bad - S{s:02d}E{ep:02d}"
+    )
 
     ep1_file = tmp_path / "Breaking Bad - S01E01.mp4"
     ep2_file = tmp_path / "Breaking Bad - S01E02.mp4"
@@ -772,10 +795,10 @@ def test_handle_item_download_calls_print_download_summary_tv_series(
         {"m3u8_urls": [], "subtitles": []},
     ]
 
-    mock_format_paths.side_effect = [
-        (str(tmp_path / "Breaking Bad (2008)" / "Season 01"), "Breaking Bad - S01E01"),
-        (str(tmp_path / "Breaking Bad (2008)" / "Season 01"), "Breaking Bad - S01E02"),
-    ]
+    mock_format_paths.side_effect = lambda title, yr, s, ep, tdir: (
+        str(tmp_path / "Breaking Bad (2008)" / f"Season {s:02d}"),
+        f"Breaking Bad - S{s:02d}E{ep:02d}"
+    )
 
     ep1_file = tmp_path / "Breaking Bad - S01E01.mp4"
     ep1_file.touch()
@@ -798,7 +821,7 @@ def test_handle_item_download_calls_print_download_summary_tv_series(
     assert summary_data["items"][1]["video_status"] == "FAILED"
 
 
-@patch("src.main.handle_existing_file_decision", return_value=("skip", {}))
+@patch("src.main.precheck_existing_files_prompt", return_value=("skip", {"mode": "skip_all"}))
 @patch("src.main.extract_video_sources")
 @patch("src.main.verify_media_file")
 @patch("src.main.is_already_downloaded")
@@ -833,12 +856,13 @@ def test_process_download_item_movie_instant_skip(mock_add_entry, mock_is_dl, mo
     mock_add_entry.assert_called_once()
 
 
+@patch("src.main.precheck_existing_files_prompt", return_value=("skip", {"mode": "skip_all"}))
 @patch("src.main.extract_episode_sources")
 @patch("src.main.verify_media_file")
 @patch("src.main.is_already_downloaded")
 @patch("src.main.add_entry")
 @patch("src.main.fetch_series_details")
-def test_process_download_item_series_instant_skip(mock_details, mock_add_entry, mock_is_dl, mock_verify, mock_extract):
+def test_process_download_item_series_instant_skip(mock_details, mock_add_entry, mock_is_dl, mock_verify, mock_extract, mock_precheck):
     mock_is_dl.return_value = True
     mock_verify.return_value = {"video_status": "HEALTHY", "missing_subtitles": []}
     mock_details.return_value = {

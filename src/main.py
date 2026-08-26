@@ -55,6 +55,75 @@ if hasattr(sys.stderr, "reconfigure"):
 
 console = Console()
 
+def precheck_existing_files_prompt(items: list[dict], batch_state: dict | None = None) -> tuple[str, dict]:
+    """Pre-checks if any items in the batch already exist locally.
+
+    Prompts user ONCE at the start if 1 or more items exist.
+    Returns ('skip' or 'overwrite', batch_state).
+    """
+    if batch_state is None:
+        batch_state = {}
+
+    prechecked = batch_state.setdefault("prechecked_status", {})
+    existing_items = []
+
+    for item in items:
+        path = item.get("expected_path")
+        sub_choice = item.get("sub_choice")
+        if not path:
+            continue
+        if path not in prechecked:
+            if is_already_downloaded(path):
+                verify_res = verify_media_file(path, required_sub_mode=sub_choice)
+                is_healthy = verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]
+                prechecked[path] = {"downloaded": True, "healthy": is_healthy, "verify_res": verify_res}
+            else:
+                prechecked[path] = {"downloaded": False, "healthy": False, "verify_res": None}
+
+        if prechecked[path]["downloaded"] and prechecked[path]["healthy"]:
+            existing_items.append(path)
+
+    if not existing_items:
+        batch_state.setdefault("mode", "skip_all")
+        return "skip", batch_state
+
+    if batch_state.get("mode"):
+        return ("overwrite" if batch_state["mode"] == "overwrite_all" else "skip"), batch_state
+
+    console.print(
+        f"\n[bold yellow]⚠️ Terdeteksi {len(existing_items)} dari {len(items)} item sudah ada di disk secara lokal.[/bold yellow]"
+    )
+    choice = questionary.select(
+        "Pilih tindakan untuk item yang sudah ada di disk:",
+        choices=[
+            "⏭ Skip semua item yang sudah ada (Default)",
+            "🔄 Re-download & Timpa semua file lama",
+        ],
+    ).ask()
+
+    if choice and choice.startswith("🔄 Re-download"):
+        batch_state["mode"] = "overwrite_all"
+        return "overwrite", batch_state
+
+    batch_state["mode"] = "skip_all"
+    return "skip", batch_state
+
+
+def get_cached_media_status(expected_path: str, required_sub_mode: str = None, batch_state: dict | None = None) -> tuple[bool, dict | None]:
+    if batch_state is None:
+        batch_state = {}
+    prechecked = batch_state.setdefault("prechecked_status", {})
+    if expected_path not in prechecked:
+        if is_already_downloaded(expected_path):
+            verify_res = verify_media_file(expected_path, required_sub_mode=required_sub_mode)
+            is_healthy = verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]
+            prechecked[expected_path] = {"downloaded": True, "healthy": is_healthy, "verify_res": verify_res}
+        else:
+            prechecked[expected_path] = {"downloaded": False, "healthy": False, "verify_res": None}
+    info = prechecked[expected_path]
+    return info["downloaded"], info["verify_res"]
+
+
 def handle_existing_file_decision(
     title: str,
     expected_path: str,
@@ -191,6 +260,16 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                     return
                 break
 
+        # --- Pre-check existing local files at the start ---
+        if batch_state is None:
+            batch_state = {}
+        ep_items_check = []
+        for ep in selected_episodes:
+            s_dir, b_name = format_tv_paths(clean_title, year, season_num, ep["episode_num"], target_dir)
+            ep_path = os.path.join(s_dir, f"{b_name}.mp4")
+            ep_items_check.append({"expected_path": ep_path, "sub_choice": selected_sub_choice})
+        precheck_existing_files_prompt(ep_items_check, batch_state=batch_state)
+
         for ep in selected_episodes:
             console.print(f"\n[bold cyan]Memproses Episode {ep['episode_num']}: {ep['title']}...[/bold cyan]")
             season_dir, base_filename = format_tv_paths(clean_title, year, season_num, ep["episode_num"], target_dir)
@@ -201,10 +280,10 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
 
             try:
                 # Instant local check
-                if is_already_downloaded(expected_path):
-                    verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
-                    if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
-                        action, batch_state = handle_existing_file_decision(ep_title, expected_path, batch_state)
+                is_dl, verify_res = get_cached_media_status(expected_path, required_sub_mode=selected_sub_choice, batch_state=batch_state)
+                if is_dl:
+                    if verify_res and verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
+                        action = "overwrite" if batch_state.get("mode") == "overwrite_all" else "skip"
                         if action == "skip":
                             console.print(f"[yellow]⏭ Episode {ep['episode_num']} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
                             add_entry(
@@ -228,7 +307,8 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
                         else:
                             console.print(f"[bold cyan]🔄 Re-download / Overwrite dipilih untuk {ep_title}. Download ulang...[/bold cyan]")
                     else:
-                        console.print(f"[bold yellow]⚠️ Episode {ep['episode_num']} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
+                        v_status = verify_res["video_status"] if verify_res else "CORRUPT"
+                        console.print(f"[bold yellow]⚠️ Episode {ep['episode_num']} terdeteksi rusak/kurang subtitle (Status: {v_status}). Re-downloading...[/bold yellow]")
 
                 sources = extract_episode_sources(ep["media_id"], item_url)
                 m3u8_urls = sources.get("m3u8_urls", [])
@@ -388,11 +468,15 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
     folder_name = f"{clean_title} ({year})" if year and year != "N/A" else clean_title
     expected_path = os.path.join(target_dir, folder_name, f"{folder_name}.mp4")
 
+    if batch_state is None:
+        batch_state = {}
+    precheck_existing_files_prompt([{"expected_path": expected_path, "sub_choice": selected_sub_choice}], batch_state=batch_state)
+
     # Instant local check
-    if is_already_downloaded(expected_path):
-        verify_res = verify_media_file(expected_path, required_sub_mode=selected_sub_choice)
-        if verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
-            action, batch_state = handle_existing_file_decision(clean_title, expected_path, batch_state)
+    is_dl, verify_res = get_cached_media_status(expected_path, required_sub_mode=selected_sub_choice, batch_state=batch_state)
+    if is_dl:
+        if verify_res and verify_res["video_status"] == "HEALTHY" and not verify_res["missing_subtitles"]:
+            action = "overwrite" if batch_state.get("mode") == "overwrite_all" else "skip"
             if action == "skip":
                 console.print(f"[yellow]⏭ {clean_title} sudah ada dan sehat secara lokal, di-skip.[/yellow]")
                 add_entry(
@@ -416,7 +500,8 @@ def process_download_item(selected_item: dict, active_url: str, config: dict, su
             else:
                 console.print(f"[bold cyan]🔄 Re-download / Overwrite dipilih untuk {clean_title}. Download ulang...[/bold cyan]")
         else:
-            console.print(f"[bold yellow]⚠️ {clean_title} terdeteksi rusak/kurang subtitle (Status: {verify_res['video_status']}). Re-downloading...[/bold yellow]")
+            v_status = verify_res["video_status"] if verify_res else "CORRUPT"
+            console.print(f"[bold yellow]⚠️ {clean_title} terdeteksi rusak/kurang subtitle (Status: {v_status}). Re-downloading...[/bold yellow]")
 
     # --- Extract Video Sources ---
     console.print("[bold yellow]Mengambil sumber video & subtitle...[/bold yellow]")
