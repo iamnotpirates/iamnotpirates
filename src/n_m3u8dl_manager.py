@@ -94,6 +94,35 @@ def ensure_binary(console=None) -> str | None:
 
 
 
+def _remove_mux_junk(save_dir: str, save_name: str, console=None) -> None:
+    """Unconditionally delete leftover {name}.MUX.mp4 and {name}.ts files."""
+    for junk_name in (f"{save_name}.MUX.mp4", f"{save_name}.ts"):
+        junk_path = os.path.join(save_dir, junk_name)
+        if not os.path.exists(junk_path):
+            continue
+        try:
+            os.remove(junk_path)
+        except OSError as exc:
+            warn_msg = f"[yellow]⚠️ Gagal menghapus file sisa '{junk_name}': {exc}[/yellow]"
+            if console:
+                console.print(warn_msg)
+            else:
+                print(warn_msg.replace("[yellow]", "").replace("[/yellow]", ""))
+
+
+def _cleanup_orphan_mux_artifacts(save_dir: str, save_name: str, console=None) -> None:
+    """Delete leftover .MUX.mp4/.ts files once the final .mp4 exists.
+
+    N_m3u8DL-RE sometimes leaves these behind on Windows when a rename is
+    blocked; they confuse users ("is MUX.mp4 the real file?"). Safe to call
+    repeatedly — only removes junk when the finished file is present.
+    """
+    expected_file = os.path.join(save_dir, f"{save_name}.mp4")
+    if not os.path.exists(expected_file):
+        return
+    _remove_mux_junk(save_dir, save_name, console)
+
+
 def download_with_re(
     m3u8_url: str,
     save_dir: str,
@@ -191,17 +220,10 @@ def download_with_re(
                         time.sleep(1)
 
             if move_success:
-                if os.path.exists(ts_file):
-                    try:
-                        os.remove(ts_file)
-                    except Exception as e:
-                        warn_msg = f"[yellow]⚠️ Gagal menghapus file temp .ts: {e}[/yellow]"
-                        if console:
-                            console.print(warn_msg)
-                        else:
-                            print(warn_msg.replace("[yellow]", "").replace("[/yellow]", ""))
+                _remove_mux_junk(save_dir, save_name, console)
                 return True
 
+        _cleanup_orphan_mux_artifacts(save_dir, save_name, console)
         return result.returncode == 0
     except KeyboardInterrupt:
         if console:

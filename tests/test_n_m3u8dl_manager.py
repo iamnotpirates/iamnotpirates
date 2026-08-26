@@ -136,7 +136,9 @@ class TestDownloadWithRe(unittest.TestCase):
         )
         self.assertTrue(result)
         mock_move.assert_called_once_with(r"C:\output\TestMovie.MUX.mp4", r"C:\output\TestMovie.mp4")
-        mock_remove.assert_called_once_with(r"C:\output\TestMovie.ts")
+        removed = [call.args[0] for call in mock_remove.call_args_list]
+        self.assertIn(r"C:\output\TestMovie.ts", removed)
+        self.assertIn(r"C:\output\TestMovie.MUX.mp4", removed)
 
     @patch("n_m3u8dl_manager.shutil.move")
     @patch("n_m3u8dl_manager.os.remove")
@@ -160,8 +162,35 @@ class TestDownloadWithRe(unittest.TestCase):
         )
         self.assertTrue(result)
         mock_move.assert_called_once_with(r"C:\output\TestMovie.MUX.mp4", r"C:\output\TestMovie.mp4")
-        mock_remove.assert_called_once_with(r"C:\output\TestMovie.ts")
+        removed = [call.args[0] for call in mock_remove.call_args_list]
+        self.assertIn(r"C:\output\TestMovie.ts", removed)
+        self.assertIn(r"C:\output\TestMovie.MUX.mp4", removed)
 
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestOrphanMuxCleanup(unittest.TestCase):
+    def _make(self, save_dir, names):
+        for n in names:
+            open(os.path.join(save_dir, n), "wb").write(b"x")
+
+    def test_removes_mux_and_ts_when_final_exists(self):
+        import n_m3u8dl_manager as m
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self._make(d, ["Film X.mp4", "Film X.MUX.mp4", "Film X.ts"])
+            m._cleanup_orphan_mux_artifacts(d, "Film X")
+            self.assertTrue(os.path.exists(os.path.join(d, "Film X.mp4")))
+            self.assertFalse(os.path.exists(os.path.join(d, "Film X.MUX.mp4")))
+            self.assertFalse(os.path.exists(os.path.join(d, "Film X.ts")))
+
+    def test_keeps_mux_and_ts_when_final_missing(self):
+        import n_m3u8dl_manager as m
+        import tempfile
+        with tempfile.TemporaryDirectory() as d:
+            self._make(d, ["Film X.MUX.mp4", "Film X.ts"])
+            m._cleanup_orphan_mux_artifacts(d, "Film X")
+            self.assertTrue(os.path.exists(os.path.join(d, "Film X.MUX.mp4")))
+            self.assertTrue(os.path.exists(os.path.join(d, "Film X.ts")))
