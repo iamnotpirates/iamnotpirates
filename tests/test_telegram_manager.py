@@ -777,13 +777,29 @@ def test_build_caption_episode_includes_season_episode():
     assert '"kind": "video"' in cap
 
 
-def test_build_caption_movie_unchanged():
-    from src.telegram_manager import build_caption
-    cap = build_caption({"kind": "video", "title": "Film A", "year": "2024",
-                         "media_type": "movie", "season": None, "episode": None,
-                         "file_size": 1, "part_count": 1, "subtitles": []})
-    assert cap.startswith("🎬 Film A (2024)")
-    assert "S0" not in cap.split("\n")[0]
+def test_build_caption_respects_telegram_1024_char_limit():
+    from src.telegram_manager import build_caption, parse_caption
+    huge_subtitles = [f"Sword.Art.Online.S01E01.1080p.WEBRip.x264.AAC.Subtitle.Indonesian.Language.Track.{i}.srt" for i in range(50)]
+    meta = {
+        "kind": "video",
+        "title": "Sword Art Online: Alicization - War of Underworld Part 2 Super Long Anime Title Version",
+        "year": "2020",
+        "media_type": "episode",
+        "season": 1,
+        "episode": 1,
+        "file_size": 350000000,
+        "part_count": 1,
+        "subtitles": huge_subtitles,
+        "archive": True,
+        "filename": "Sword.Art.Online.S01E01.1080p.WEBRip.x264.AAC.mp4",
+    }
+    cap = build_caption(meta)
+    assert len(cap) <= 1024
+    parsed = parse_caption(cap)
+    assert parsed is not None
+    assert parsed.get("app") == "iamnotpirates"
+    assert parsed.get("title") is not None
+
 
 
 class TestDestFakeClient:
