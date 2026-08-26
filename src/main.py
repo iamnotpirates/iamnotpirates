@@ -105,8 +105,13 @@ def precheck_existing_files_prompt(items: list[dict], batch_state: dict | None =
         return ("overwrite" if batch_state.get("mode") == "overwrite_all" else "skip"), batch_state
 
     console.print(
-        f"\n[bold yellow]⚠️ Terdeteksi {len(existing_items)} dari {len(items)} item sudah ada di disk secara lokal.[/bold yellow]"
+        f"\n[bold yellow]⚠️ Terdeteksi {len(existing_items)} dari {len(items)} item sudah ada di disk secara lokal:[/bold yellow]"
     )
+    item_by_path = {it.get("expected_path"): it for it in items if it.get("expected_path")}
+    for idx, path in enumerate(existing_items, start=1):
+        title = item_by_path.get(path, {}).get("title") or os.path.basename(path)
+        console.print(f"  [yellow]{idx}.[/yellow] [bold]{title}[/bold] → [dim]{path}[/dim]")
+    console.print()
 
     if len(existing_items) == 1:
         choices = [
