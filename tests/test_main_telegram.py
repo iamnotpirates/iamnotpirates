@@ -571,3 +571,30 @@ def test_manual_backup_ctrl_c_aborts_batch_gracefully(
         mock_cb.return_value.ask.return_value = ["1. SAO E01", "2. SAO E02"]
         handle_telegram_manual_backup({})
     assert mock_upload.call_count == 1
+
+
+@patch("src.main.tg_disconnect")
+@patch("src.main.upload_backup", side_effect=RuntimeError("FloodWait 30 seconds"))
+@patch("src.main._connected_client")
+@patch("src.main.get_destinations", return_value=[{"type": "saved", "target": "me"}])
+@patch("src.main.require_telegram_ready", return_value=True)
+@patch("src.main.questionary.press_any_key_to_continue")
+def test_manual_backup_failure_logged_to_file(
+    _press, _ready, _dests, mock_client, mock_upload, _disc, tmp_path
+):
+    log_path = tmp_path / "last_backup_error.log"
+    f1 = tmp_path / "e01.mkv"; f1.write_bytes(b"a")
+    from src.main import handle_telegram_manual_backup, _BACKUP_ERROR_LOG
+    entries = [{"title": "SAO E01", "year": "", "media_type": "episode", "season": 1,
+                "episode": 1, "output_path": str(f1), "file_size": 1, "backed": False}]
+    with patch("src.main._local_listing_with_backup_status", return_value=entries), \
+         patch("src.main.format_local_delete_table"), \
+         patch("src.main._BACKUP_ERROR_LOG", str(log_path)), \
+         patch("src.main.questionary.checkbox") as mock_cb, \
+         patch("builtins.print"):
+        mock_cb.return_value.ask.return_value = ["1. SAO E01"]
+        handle_telegram_manual_backup({})
+    assert log_path.exists()
+    content = log_path.read_text(encoding="utf-8", errors="replace")
+    assert "FloodWait" in content
+    assert "RuntimeError" in content or "SAO E01" in content

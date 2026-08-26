@@ -2,6 +2,7 @@ import sys
 import os
 import re
 import json
+from datetime import datetime
 import questionary
 from rich.console import Console
 
@@ -992,7 +993,8 @@ def handle_search(active_url: str, config: dict) -> None:
                     print_success(f"Restore selesai: {out_path}")
                     restored_total = 1
                 except Exception as exc:
-                    print_error(f"Restore gagal: {exc}")
+                    print_error(f"Restore gagal: {type(exc).__name__}: {exc}")
+                    _log_exception("Restore gagal", exc)
                     restored_total = 0
             else:
                 summary_auto = {
@@ -1035,7 +1037,8 @@ def handle_search(active_url: str, config: dict) -> None:
                     print_success(f"Restore selesai: {out_path}")
                     restored += 1
                 except Exception as exc:
-                    print_error(f"Restore gagal: {exc}")
+                    print_error(f"Restore gagal: {type(exc).__name__}: {exc}")
+                    _log_exception("Restore gagal", exc)
                     failed_count += 1
             else:
                 process_download_item(chosen, active_url, config, summary)
@@ -1195,6 +1198,22 @@ def handle_telegram_settings(config: dict) -> None:
                 print_success("Session Telegram dihapus.")
 
 
+_BACKUP_ERROR_LOG = os.path.join(os.path.expanduser("~"), ".iamnotpirates", "last_backup_error.log")
+
+
+def _log_exception(context: str, exc: Exception) -> None:
+    """Append failure details to a persistent log so nothing fails silently."""
+    import traceback
+    try:
+        with open(_BACKUP_ERROR_LOG, "a", encoding="utf-8") as fh:
+            fh.write(f"\n[{datetime.now().isoformat(timespec='seconds')}] {context}\n")
+            fh.write(f"{type(exc).__name__}: {exc}\n")
+            fh.write(traceback.format_exc())
+            fh.write("-" * 60 + "\n")
+    except OSError:
+        pass
+
+
 def _confirm_or_proceed(message: str) -> bool:
     try:
         return bool(questionary.confirm(message).ask())
@@ -1255,7 +1274,8 @@ def handle_telegram_search_restore(config: dict) -> None:
             print_success(f"Restore selesai: {last_path}")
             success += 1
         except Exception as exc:
-            print_error(f"Restore gagal: {exc}")
+            print_error(f"Restore gagal: {type(exc).__name__}: {exc}")
+            _log_exception("Restore gagal", exc)
             failed += 1
     console.print(f"[bold]Selesai: {success} berhasil, {failed} gagal, {skipped} dilewati.[/bold]")
     if success == 1 and last_path:
@@ -1422,7 +1442,8 @@ def handle_telegram_manual_backup(config: dict) -> None:
                               f"sisa batch dilewati.[/bold yellow]")
                 break
             except Exception as exc:
-                print_error(f"Gagal backup {entry['title']}: {exc}")
+                _log_exception(f"Backup gagal: {entry['title']}", exc)
+                print_error(f"Gagal backup {entry['title']}: {type(exc).__name__}: {exc}")
                 fail_count += 1
     finally:
             tg_disconnect(client)
