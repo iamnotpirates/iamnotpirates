@@ -1546,7 +1546,7 @@ def _rich_progress(total: int, description: str):
     task_id = progress.add_task(description, total=total)
 
     def callback(current: int, total_bytes: int):
-        progress.update(task_id, completed=current)
+        progress.update(task_id, completed=current, total=total_bytes)
 
     return progress, callback
 
@@ -1578,6 +1578,8 @@ def maybe_auto_backup(video_path: str, config: dict, title: str, year: str,
         try:
             with progress:
                 upload_backup(client, video_path, sub_paths, meta, destinations, progress_callback=cb)
+                task = progress.tasks[0]
+                progress.update(task.id, completed=task.total)
         finally:
             tg_disconnect(client)
         print_success(f"Auto-backup Telegram selesai: {title}")
@@ -1638,6 +1640,8 @@ def handle_telegram_manual_backup(config: dict) -> None:
                 progress, cb = _rich_progress(entry["file_size"], entry["title"])
                 with progress:
                     upload_backup(client, entry["output_path"], sub_paths, meta, destinations, progress_callback=cb)
+                    task = progress.tasks[0]
+                    progress.update(task.id, completed=task.total)
                 print_success(f"Berhasil backup: {entry['title']}")
                 success_count += 1
             except KeyboardInterrupt:
