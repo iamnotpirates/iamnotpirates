@@ -16,7 +16,7 @@ def test_pyproject_toml_version():
         data = tomllib.load(f)
 
     version = data.get("project", {}).get("version")
-    assert version == "1.3.0", f"Expected pyproject.toml version to be 1.3.0, got '{version}'"
+    assert version == "1.3.1", f"Expected pyproject.toml version to be 1.3.1, got '{version}'"
 
 
 def test_ui_version():
@@ -24,13 +24,13 @@ def test_ui_version():
     assert ui_path.exists(), "src/ui.py not found"
 
     content = ui_path.read_text(encoding="utf-8")
-    assert "1.3.0" in content, "Expected '1.3.0' to be in src/ui.py"
+    assert "1.3.1" in content, "Expected '1.3.1' to be in src/ui.py"
 
     buf = StringIO()
     console = Console(file=buf, force_terminal=True, width=80)
     print_header("https://z2.idlixku.com/", console=console)
     output = buf.getvalue()
-    assert "1.3.0" in output, "Expected '1.3.0' to be printed by print_header"
+    assert "1.3.1" in output, "Expected '1.3.1' to be printed by print_header"
 
 
 def test_readme_version():
@@ -38,4 +38,4 @@ def test_readme_version():
     assert readme_path.exists(), "README.md not found"
 
     content = readme_path.read_text(encoding="utf-8")
-    assert "1.3.0" in content, "Expected '1.3.0' to be in README.md"
+    assert "1.3.1" in content, "Expected '1.3.1' to be in README.md"

@@ -1,6 +1,6 @@
 [project]
 name = "iamnotpirates"
-version = "1.3.0"
+version = "1.3.1"
 description = "IDLIX CLI Scraper & Stream Downloader"
 readme = "README.md"
 requires-python = ">=3.9"

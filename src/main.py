@@ -1773,7 +1773,7 @@ def handle_telegram_menu(active_url: str, config: dict) -> None:
 
 def main() -> None:
     if len(sys.argv) > 1 and sys.argv[1] in ("--version", "-v", "version"):
-        console.print("I Am Not Pirates v1.3.0")
+        console.print("I Am Not Pirates v1.3.1")
         return
 
     init_db()

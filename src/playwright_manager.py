@@ -79,14 +79,16 @@ def ensure_playwright(console=None) -> bool:
     browsers_path = get_playwright_browsers_path()
     os.environ["PLAYWRIGHT_BROWSERS_PATH"] = browsers_path
 
-    cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
     success = False
-    try:
-        res = subprocess.run(cmd, check=False)
-        if res.returncode == 0:
-            success = True
-    except Exception:
-        success = False
+
+    if not getattr(sys, "frozen", False):
+        cmd = [sys.executable, "-m", "playwright", "install", "chromium"]
+        try:
+            res = subprocess.run(cmd, check=False)
+            if res.returncode == 0:
+                success = True
+        except Exception:
+            success = False
 
     if not success:
         try:
